@@ -2,13 +2,41 @@ require("dotenv").config()
 
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const sanitizeInput = require("./middleware/sanitizeMiddleware");
 
 const app = express();
 
-app.use(cors());
+app.use(helmet());
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:8080",
+  "https://badhon.mooo.com"
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests without an Origin header
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true
+  })
+);
+
 app.use(express.json());
+app.use(sanitizeInput);
   
 app.get("/api", (req, res) => {
   res.json({

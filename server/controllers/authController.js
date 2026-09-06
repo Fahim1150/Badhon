@@ -7,9 +7,24 @@ const register = async (req, res) => {
     const { name, email, password, role } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      typeof name !== "string" ||
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
       return res.status(400).json({
-        message: "Name, email and password are required",
+        message: "Name, email and password must be valid strings",
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        message: "Invalid email format",
       });
     }
 
