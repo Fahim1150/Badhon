@@ -1,5 +1,7 @@
 ﻿{
   "name": "Test User",
-  "email": "test@example.com",
+  "email": {
+    "$ne": null
+  },
   "password": "123456"
 }
