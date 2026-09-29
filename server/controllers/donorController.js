@@ -1,12 +1,60 @@
 const Donor = require("../models/Donor");
+const User = require("../models/User");
 
 // CREATE
 const createDonor = async (req, res) => {
     try {
-        const donor = await Donor.create(req.body);
+        const {
+            phone,
+            bloodGroup,
+            district,
+            available,
+        } = req.body;
+
+        if (!phone || !bloodGroup || !district) {
+            return res.status(400).json({
+                message: "Phone, blood group and district are required",
+            });
+        }
+
+        const user = await User.findById(req.user.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+            });
+        }
+
+        const existingDonor = await Donor.findOne({
+            user: req.user.userId,
+        });
+
+        if (existingDonor) {
+            return res.status(409).json({
+                message: "Donor profile already exists",
+            });
+        }
+
+        const donor = await Donor.create({
+            user: user._id,
+            name: user.name,
+            email: user.email,
+            phone,
+            bloodGroup,
+            district,
+            available:
+                typeof available === "boolean"
+                    ? available
+                    : true,
+        });
+
         res.status(201).json(donor);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error("Create donor error:", error.message);
+
+        res.status(400).json({
+            message: error.message,
+        });
     }
 };
 

@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const donorSchema = new mongoose.Schema(
     {
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+            unique: true,
+        },
+
         name: {
             type: String,
             required: true,
@@ -12,6 +19,7 @@ const donorSchema = new mongoose.Schema(
             type: String,
             required: true,
             trim: true,
+            lowercase: true,
         },
 
         phone: {
@@ -23,7 +31,16 @@ const donorSchema = new mongoose.Schema(
         bloodGroup: {
             type: String,
             required: true,
-            enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+            enum: [
+                "A+",
+                "A-",
+                "B+",
+                "B-",
+                "AB+",
+                "AB-",
+                "O+",
+                "O-",
+            ],
         },
 
         district: {
