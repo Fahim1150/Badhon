@@ -721,8 +721,41 @@ function DonorProfile() {
     setMessage("");
     setError("");
 
-    // Backend connection will be added in the next step.
-    setMessage("Donor profile form is ready.");
+    try {
+      const token = localStorage.getItem("badhon_token");
+
+      if (!token) {
+        goTo("/login");
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/donors`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          phone: form.phone,
+          bloodGroup: form.bloodGroup,
+          district: form.location,
+          available: form.available,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to create donor profile"
+        );
+      }
+
+      setMessage("Donor profile created successfully.");
+
+    } catch (error) {
+      setError(error.message);
+    }
   };
 
   return (
