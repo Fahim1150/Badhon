@@ -5,6 +5,7 @@ const authorizeRoles = require("../middleware/roleMiddleware");
 
 const {
     createDonor,
+    getMyDonorProfile,
     getDonors,
     getDonorById,
     updateDonor,
@@ -14,6 +15,8 @@ const {
 const router = express.Router();
 
 router.post("/", authMiddleware, createDonor);
+
+router.get("/me", authMiddleware, getMyDonorProfile);
 
 router.get("/", authMiddleware, getDonors);
 

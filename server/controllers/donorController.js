@@ -58,6 +58,29 @@ const createDonor = async (req, res) => {
     }
 };
 
+// GET MY DONOR PROFILE
+const getMyDonorProfile = async (req, res) => {
+    try {
+        const donor = await Donor.findOne({
+            user: req.user.userId,
+        });
+
+        if (!donor) {
+            return res.status(404).json({
+                message: "Donor profile not found",
+            });
+        }
+
+        res.status(200).json(donor);
+    } catch (error) {
+        console.error("Get donor profile error:", error.message);
+
+        res.status(500).json({
+            message: "Server error",
+        });
+    }
+};
+
 // READ ALL
 const getDonors = async (req, res) => {
     try {
@@ -121,6 +144,7 @@ const deleteDonor = async (req, res) => {
 
 module.exports = {
     createDonor,
+    getMyDonorProfile,
     getDonors,
     getDonorById,
     updateDonor,

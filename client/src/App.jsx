@@ -689,15 +689,14 @@ function Dashboard() {
 function DonorProfile() {
   const [form, setForm] = useState({
     bloodGroup: "",
-    dateOfBirth: "",
-    gender: "",
     phone: "",
-    location: "",
+    district: "",
     available: true,
-    lastDonationDate: "",
-    emergencyContact: "",
   });
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [profileExists, setProfileExists] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -705,6 +704,53 @@ function DonorProfile() {
     window.history.pushState({}, "", path);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
+
+  useEffect(() => {
+    const loadDonorProfile = async () => {
+      const token = localStorage.getItem("badhon_token");
+
+      if (!token) {
+        goTo("/login");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/donors/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.status === 404) {
+          setProfileExists(false);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data.message || "Failed to load donor profile"
+          );
+        }
+
+        setForm({
+          bloodGroup: data.bloodGroup || "",
+          phone: data.phone || "",
+          district: data.district || "",
+          available: data.available ?? true,
+        });
+
+        setProfileExists(true);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDonorProfile();
+  }, []);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -720,17 +766,24 @@ function DonorProfile() {
 
     setMessage("");
     setError("");
+    setSaving(true);
+
+    const token = localStorage.getItem("badhon_token");
+
+    if (!token) {
+      goTo("/login");
+      return;
+    }
 
     try {
-      const token = localStorage.getItem("badhon_token");
+      const url = profileExists
+        ? `${API_BASE}/donors/me`
+        : `${API_BASE}/donors`;
 
-      if (!token) {
-        goTo("/login");
-        return;
-      }
+      const method = profileExists ? "PUT" : "POST";
 
-      const response = await fetch(`${API_BASE}/donors`, {
-        method: "POST",
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -738,7 +791,7 @@ function DonorProfile() {
         body: JSON.stringify({
           phone: form.phone,
           bloodGroup: form.bloodGroup,
-          district: form.location,
+          district: form.district,
           available: form.available,
         }),
       });
@@ -747,46 +800,79 @@ function DonorProfile() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to create donor profile"
+          data.message || "Failed to save donor profile"
         );
       }
 
-      setMessage("Donor profile created successfully.");
+      setProfileExists(true);
 
-    } catch (error) {
-      setError(error.message);
+      setForm({
+        bloodGroup: data.bloodGroup || "",
+        phone: data.phone || "",
+        district: data.district || "",
+        available: data.available ?? true,
+      });
+
+      setMessage(
+        profileExists
+          ? "Donor profile updated successfully."
+          : "Donor profile created successfully."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <main className="donor-page">
+        <div className="donor-container">
+          <p>Loading donor profile...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="donor-page">
-      <div className="container donor-container">
-
+      <div className="donor-container">
         <div className="donor-header">
-          <div>
-            <p className="dashboard-eyebrow">
-              Donor Profile
-            </p>
+          <p className="dashboard-eyebrow">Donor Profile</p>
 
-            <h1>Become a BADHON donor</h1>
+          <h1>
+            {profileExists
+              ? "Manage your donor profile"
+              : "Become a BADHON donor"}
+          </h1>
 
-            <p>
-              Add your information so people who need blood
-              can find compatible donors.
-            </p>
-          </div>
+          <p>
+            Add your information so people who need blood can
+            find compatible donors.
+          </p>
         </div>
+
+        {message && (
+          <div className="form-success">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="form-error">
+            {error}
+          </div>
+        )}
 
         <form
           className="donor-form"
           onSubmit={handleSubmit}
         >
-
           <section className="donor-form-section">
-            <h2>Basic Information</h2>
+            <h2>Donor Information</h2>
 
             <div className="form-grid">
-
               <div className="form-group">
                 <label htmlFor="bloodGroup">
                   Blood Group
@@ -814,78 +900,41 @@ function DonorProfile() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="dateOfBirth">
-                  Date of Birth
-                </label>
-
-                <input
-                  id="dateOfBirth"
-                  name="dateOfBirth"
-                  type="date"
-                  value={form.dateOfBirth}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="gender">
-                  Gender
-                </label>
-
-                <select
-                  id="gender"
-                  name="gender"
-                  value={form.gender}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">
-                    Select gender
-                  </option>
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-
-              <div className="form-group">
                 <label htmlFor="phone">
                   Phone Number
                 </label>
 
                 <input
                   id="phone"
-                  name="phone"
                   type="tel"
-                  placeholder="01XXXXXXXXX"
+                  name="phone"
                   value={form.phone}
                   onChange={handleChange}
+                  placeholder="01XXXXXXXXX"
                   required
                 />
               </div>
 
+              <div className="form-group">
+                <label htmlFor="district">
+                  Location / District
+                </label>
+
+                <input
+                  id="district"
+                  type="text"
+                  name="district"
+                  value={form.district}
+                  onChange={handleChange}
+                  placeholder="e.g. Mirpur, Dhaka"
+                  required
+                />
+              </div>
             </div>
           </section>
 
           <section className="donor-form-section">
-            <h2>Location & Availability</h2>
-
-            <div className="form-group">
-              <label htmlFor="location">
-                Location
-              </label>
-
-              <input
-                id="location"
-                name="location"
-                type="text"
-                placeholder="Example: Mirpur, Dhaka"
-                value={form.location}
-                onChange={handleChange}
-                required
-              />
-            </div>
+            <h2>Availability</h2>
 
             <label className="availability-checkbox">
               <input
@@ -901,59 +950,10 @@ function DonorProfile() {
             </label>
           </section>
 
-          <section className="donor-form-section">
-            <h2>Donation History</h2>
-
-            <div className="form-group">
-              <label htmlFor="lastDonationDate">
-                Last Donation Date
-              </label>
-
-              <input
-                id="lastDonationDate"
-                name="lastDonationDate"
-                type="date"
-                value={form.lastDonationDate}
-                onChange={handleChange}
-              />
-            </div>
-          </section>
-
-          <section className="donor-form-section">
-            <h2>Emergency Contact</h2>
-
-            <div className="form-group">
-              <label htmlFor="emergencyContact">
-                Emergency Contact
-              </label>
-
-              <input
-                id="emergencyContact"
-                name="emergencyContact"
-                type="tel"
-                placeholder="Emergency contact number"
-                value={form.emergencyContact}
-                onChange={handleChange}
-              />
-            </div>
-          </section>
-
-          {message && (
-            <div className="form-success">
-              {message}
-            </div>
-          )}
-
-          {error && (
-            <div className="form-error">
-              {error}
-            </div>
-          )}
-
           <div className="donor-form-actions">
             <button
               type="button"
-              className="dashboard-button secondary"
+              className="dashboard-button dashboard-button-secondary"
               onClick={() => goTo("/dashboard")}
             >
               Cancel
@@ -962,11 +962,15 @@ function DonorProfile() {
             <button
               type="submit"
               className="dashboard-button"
+              disabled={saving}
             >
-              Save Donor Profile
+              {saving
+                ? "Saving..."
+                : profileExists
+                  ? "Update Donor Profile"
+                  : "Create Donor Profile"}
             </button>
           </div>
-
         </form>
       </div>
     </main>
