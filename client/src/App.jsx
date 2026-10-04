@@ -524,163 +524,320 @@ function AuthPage({ mode }) {
   );
 }
 
-/* ---------- Temporary Dashboard ---------- */
+/* ---------- Dashboard ---------- */
 
 function Dashboard() {
-  const user = JSON.parse(
-    localStorage.getItem("badhon_user") || "{}"
-  );
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("badhon_user") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const [donorStatus, setDonorStatus] = useState("loading");
+  const [donorError, setDonorError] = useState("");
 
   const goTo = (path) => {
     window.history.pushState({}, "", path);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      const token = localStorage.getItem("badhon_token");
+
+      if (!token) {
+        goTo("/login");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/donors/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.status === 404) {
+          setDonorStatus("incomplete");
+          return;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem("badhon_token");
+          localStorage.removeItem("badhon_user");
+          goTo("/login");
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(data.message || "Unable to load donor status");
+        }
+
+        setDonorStatus("complete");
+      } catch (err) {
+        setDonorStatus("error");
+        setDonorError(err.message || "Unable to load donor status");
+      }
+    };
+
+    loadDashboardData();
+  }, []);
+
+  const displayName = user.name?.trim() || "User";
+  const displayEmail = user.email?.trim() || "Not available";
+  const displayRole = user.role?.trim() || "USER";
+
   return (
     <main className="dashboard-page">
       <div className="container dashboard-container">
-
         <section className="dashboard-header">
           <div>
-            <p className="dashboard-eyebrow">
-              BADHON Dashboard
-            </p>
-
-            <h1>
-              Welcome, {user.name || "User"} 👋
-            </h1>
-
+            <p className="dashboard-eyebrow">BADHON Dashboard</p>
+            <h1>Welcome, {displayName} 👋</h1>
             <p className="dashboard-intro">
-              Manage your blood requests, donor information,
-              and account from one place.
+              Your BADHON account at a glance. Manage your profile and keep
+              your donor information ready when it matters.
             </p>
           </div>
 
-          <div className="dashboard-role">
-            {user.role || "USER"}
+          <div className="dashboard-role">{displayRole}</div>
+        </section>
+
+        <section className="dashboard-summary" aria-label="Account summary">
+          <div className="summary-card">
+            <span className="summary-icon">👤</span>
+            <div>
+              <span className="summary-label">Account</span>
+              <strong>Active</strong>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <span className="summary-icon">❤️</span>
+            <div>
+              <span className="summary-label">Donor profile</span>
+              {donorStatus === "loading" ? (
+                <strong className="summary-muted">Checking...</strong>
+              ) : donorStatus === "complete" ? (
+                <strong className="summary-success">Completed</strong>
+              ) : donorStatus === "incomplete" ? (
+                <strong className="summary-warning">Not completed</strong>
+              ) : (
+                <strong className="summary-muted">Unavailable</strong>
+              )}
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <span className="summary-icon">🩸</span>
+            <div>
+              <span className="summary-label">Blood requests</span>
+              <strong className="summary-muted">Coming next</strong>
+            </div>
           </div>
         </section>
 
-        <section className="dashboard-actions">
-
-          <button
-            className="dashboard-action primary"
-            onClick={() => goTo("/requests")}
-          >
-            <span className="action-icon">🩸</span>
-
+        <section className="dashboard-section">
+          <div className="dashboard-section-heading">
             <div>
-              <strong>Find Blood</strong>
-              <span>
-                Search for available blood requests
-              </span>
+              <p className="dashboard-eyebrow">Quick actions</p>
+              <h2>What would you like to do?</h2>
             </div>
-          </button>
+          </div>
 
-          <button
-            className="dashboard-action"
-            onClick={() => goTo("/donor")}
-          >
-            <span className="action-icon">❤️</span>
+          <div className="dashboard-actions">
+            <button
+              className="dashboard-action"
+              onClick={() => goTo("/donor")}
+            >
+              <span className="action-icon">❤️</span>
+              <div>
+                <strong>
+                  {donorStatus === "complete"
+                    ? "Manage Donor Profile"
+                    : "Complete Donor Profile"}
+                </strong>
+                <span>
+                  Keep your blood group, location, phone, and availability up
+                  to date.
+                </span>
+              </div>
+              <span className="action-arrow">→</span>
+            </button>
 
-            <div>
-              <strong>Donor Profile</strong>
-              <span>
-                Manage your donor information
-              </span>
+            <div className="dashboard-action dashboard-action-disabled">
+              <span className="action-icon">🩸</span>
+              <div>
+                <strong>Find Blood</strong>
+                <span>
+                  Blood search and request matching will be available in the
+                  next workflow stage.
+                </span>
+              </div>
+              <span className="action-badge">Next</span>
             </div>
-          </button>
 
-          <button
-            className="dashboard-action"
-            onClick={() => goTo("/my-requests")}
-          >
-            <span className="action-icon">📋</span>
-
-            <div>
-              <strong>My Requests</strong>
-              <span>
-                View your blood request history
-              </span>
+            <div className="dashboard-action dashboard-action-disabled">
+              <span className="action-icon">📋</span>
+              <div>
+                <strong>My Requests</strong>
+                <span>
+                  Request history will appear here after the blood-request
+                  workflow is added.
+                </span>
+              </div>
+              <span className="action-badge">Next</span>
             </div>
-          </button>
-
+          </div>
         </section>
 
         <section className="dashboard-grid">
-
           <div className="dashboard-card">
-            <h2>My Blood Requests</h2>
-
-            <div className="empty-dashboard">
-              <span>🩸</span>
-
-              <h3>No requests yet</h3>
-
-              <p>
-                Your blood requests will appear here.
-              </p>
-
-              <button
-                className="dashboard-button"
-                onClick={() => goTo("/requests/new")}
-              >
-                Create Blood Request
-              </button>
-            </div>
-          </div>
-
-          <div className="dashboard-card">
-            <h2>Donor Status</h2>
-
-            <div className="donor-status">
-              <div className="status-icon">
-                ❤️
-              </div>
-
+            <div className="card-heading-row">
               <div>
-                <strong>Donor profile not completed</strong>
-
-                <p>
-                  Complete your donor profile so you can
-                  help people who need blood.
-                </p>
+                <p className="card-eyebrow">Donor readiness</p>
+                <h2>Your donor profile</h2>
               </div>
+              <span
+                className={`status-badge ${
+                  donorStatus === "complete"
+                    ? "status-complete"
+                    : donorStatus === "incomplete"
+                      ? "status-incomplete"
+                      : donorStatus === "error"
+                        ? "status-error"
+                        : "status-loading"
+                }`}
+              >
+                {donorStatus === "complete"
+                  ? "Ready"
+                  : donorStatus === "incomplete"
+                    ? "Incomplete"
+                    : donorStatus === "error"
+                      ? "Unavailable"
+                      : "Checking"}
+              </span>
             </div>
+
+            {donorStatus === "loading" && (
+              <div className="dashboard-state loading-state">
+                <span className="state-spinner" aria-hidden="true" />
+                <div>
+                  <strong>Checking your donor profile</strong>
+                  <p>Please wait a moment.</p>
+                </div>
+              </div>
+            )}
+
+            {donorStatus === "complete" && (
+              <div className="dashboard-state">
+                <span className="state-icon success-icon">✓</span>
+                <div>
+                  <strong>Your donor profile is complete.</strong>
+                  <p>
+                    Your saved donor information is available for the next
+                    BADHON workflow steps.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {donorStatus === "incomplete" && (
+              <div className="dashboard-state">
+                <span className="state-icon warning-icon">!</span>
+                <div>
+                  <strong>Complete your donor profile.</strong>
+                  <p>
+                    Add your blood group, location, phone number, and
+                    availability to prepare your account for donation.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {donorStatus === "error" && (
+              <div className="dashboard-state">
+                <span className="state-icon error-icon">!</span>
+                <div>
+                  <strong>We couldn't check your donor profile.</strong>
+                  <p>{donorError}</p>
+                </div>
+              </div>
+            )}
 
             <button
-              className="dashboard-button secondary"
+              className="dashboard-button"
               onClick={() => goTo("/donor")}
             >
-              Complete Donor Profile
+              {donorStatus === "complete"
+                ? "Manage Donor Profile"
+                : "Open Donor Profile"}
             </button>
           </div>
 
-        </section>
-
-        <section className="dashboard-card account-card">
-          <h2>Account Information</h2>
-
-          <div className="account-info">
-
-            <div>
-              <span>Name</span>
-              <strong>{user.name || "Not available"}</strong>
+          <div className="dashboard-card">
+            <div className="card-heading-row">
+              <div>
+                <p className="card-eyebrow">Next steps</p>
+                <h2>Keep your account ready</h2>
+              </div>
             </div>
 
-            <div>
-              <span>Email</span>
-              <strong>{user.email || "Not available"}</strong>
-            </div>
+            <div className="next-step-list">
+              <div className="next-step">
+                <span className="next-step-number">01</span>
+                <div>
+                  <strong>Complete your donor profile</strong>
+                  <p>Make sure your donor information is accurate.</p>
+                </div>
+              </div>
 
-            <div>
-              <span>Role</span>
-              <strong>{user.role || "USER"}</strong>
-            </div>
+              <div className="next-step">
+                <span className="next-step-number">02</span>
+                <div>
+                  <strong>Keep availability updated</strong>
+                  <p>Update your donor availability whenever it changes.</p>
+                </div>
+              </div>
 
+              <div className="next-step next-step-muted">
+                <span className="next-step-number">03</span>
+                <div>
+                  <strong>Blood-request workflow</strong>
+                  <p>This will be added in the next project segment.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
+        <section className="dashboard-card account-card">
+          <div className="card-heading-row">
+            <div>
+              <p className="card-eyebrow">Account</p>
+              <h2>Account information</h2>
+            </div>
+          </div>
+
+          <div className="account-info">
+            <div>
+              <span>Name</span>
+              <strong>{displayName}</strong>
+            </div>
+            <div>
+              <span>Email</span>
+              <strong>{displayEmail}</strong>
+            </div>
+            <div>
+              <span>Role</span>
+              <strong>{displayRole}</strong>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );
