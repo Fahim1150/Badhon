@@ -11,9 +11,18 @@ const createDonor = async (req, res) => {
             available,
         } = req.body;
 
-        if (!phone || !bloodGroup || !district) {
+        const normalizedPhone = String(phone || "").trim();
+        const normalizedDistrict = String(district || "").trim();
+
+        if (!normalizedPhone || !bloodGroup || !normalizedDistrict) {
             return res.status(400).json({
                 message: "Phone, blood group and district are required",
+            });
+        }
+
+        if (!/^01\\d{9}$/.test(normalizedPhone)) {
+            return res.status(400).json({
+                message: "Please provide a valid Bangladesh mobile number",
             });
         }
 
@@ -39,9 +48,9 @@ const createDonor = async (req, res) => {
             user: user._id,
             name: user.name,
             email: user.email,
-            phone,
+            phone: normalizedPhone,
             bloodGroup,
-            district,
+            district: normalizedDistrict,
             available:
                 typeof available === "boolean"
                     ? available
@@ -91,18 +100,27 @@ const updateMyDonorProfile = async (req, res) => {
             available,
         } = req.body;
 
-        if (!phone || !bloodGroup || !district) {
+        const normalizedPhone = String(phone || "").trim();
+        const normalizedDistrict = String(district || "").trim();
+
+        if (!normalizedPhone || !bloodGroup || !normalizedDistrict) {
             return res.status(400).json({
                 message: "Phone, blood group and district are required",
+            });
+        }
+
+        if (!/^01\\d{9}$/.test(normalizedPhone)) {
+            return res.status(400).json({
+                message: "Please provide a valid Bangladesh mobile number",
             });
         }
 
         const donor = await Donor.findOneAndUpdate(
             { user: req.user.userId },
             {
-                phone,
+                phone: normalizedPhone,
                 bloodGroup,
-                district,
+                district: normalizedDistrict,
                 available:
                     typeof available === "boolean"
                         ? available
