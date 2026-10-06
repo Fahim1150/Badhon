@@ -81,6 +81,52 @@ const getMyDonorProfile = async (req, res) => {
     }
 };
 
+// UPDATE MY DONOR PROFILE
+const updateMyDonorProfile = async (req, res) => {
+    try {
+        const {
+            phone,
+            bloodGroup,
+            district,
+            available,
+        } = req.body;
+
+        if (!phone || !bloodGroup || !district) {
+            return res.status(400).json({
+                message: "Phone, blood group and district are required",
+            });
+        }
+
+        const donor = await Donor.findOneAndUpdate(
+            { user: req.user.userId },
+            {
+                phone,
+                bloodGroup,
+                district,
+                available:
+                    typeof available === "boolean"
+                        ? available
+                        : true,
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!donor) {
+            return res.status(404).json({
+                message: "Donor profile not found",
+            });
+        }
+
+        res.status(200).json(donor);
+    } catch (error) {
+        console.error("Update donor profile error:", error.message);
+
+        res.status(400).json({
+            message: error.message,
+        });
+    }
+};
+
 // READ ALL
 const getDonors = async (req, res) => {
     try {
@@ -106,7 +152,7 @@ const getDonorById = async (req, res) => {
     }
 };
 
-// UPDATE
+// UPDATE BY ID
 const updateDonor = async (req, res) => {
     try {
         const donor = await Donor.findByIdAndUpdate(
@@ -145,6 +191,7 @@ const deleteDonor = async (req, res) => {
 module.exports = {
     createDonor,
     getMyDonorProfile,
+    updateMyDonorProfile,
     getDonors,
     getDonorById,
     updateDonor,
