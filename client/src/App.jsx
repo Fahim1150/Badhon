@@ -536,6 +536,7 @@ function Dashboard() {
   });
 
   const [donorStatus, setDonorStatus] = useState("loading");
+  const [donorAvailable, setDonorAvailable] = useState(false);
   const [donorError, setDonorError] = useState("");
 
   const goTo = (path) => {
@@ -577,6 +578,7 @@ function Dashboard() {
           throw new Error(data.message || "Unable to load donor status");
         }
 
+        setDonorAvailable(data.available === true);
         setDonorStatus("complete");
       } catch (err) {
         setDonorStatus("error");
@@ -623,7 +625,9 @@ function Dashboard() {
               {donorStatus === "loading" ? (
                 <strong className="summary-muted">Checking...</strong>
               ) : donorStatus === "complete" ? (
-                <strong className="summary-success">Completed</strong>
+                <strong className={donorAvailable ? "summary-success" : "summary-warning"}>
+                  {donorAvailable ? "Available" : "Unavailable"}
+                </strong>
               ) : donorStatus === "incomplete" ? (
                 <strong className="summary-warning">Not completed</strong>
               ) : (
@@ -714,7 +718,9 @@ function Dashboard() {
                 }`}
               >
                 {donorStatus === "complete"
-                  ? "Ready"
+                  ? donorAvailable
+                    ? "Available"
+                    : "Unavailable"
                   : donorStatus === "incomplete"
                     ? "Incomplete"
                     : donorStatus === "error"
@@ -737,10 +743,15 @@ function Dashboard() {
               <div className="dashboard-state">
                 <span className="state-icon success-icon">✓</span>
                 <div>
-                  <strong>Your donor profile is complete.</strong>
+                  <strong>
+                    {donorAvailable
+                      ? "Your donor profile is complete and available."
+                      : "Your donor profile is complete but unavailable."}
+                  </strong>
                   <p>
-                    Your saved donor information is available for the next
-                    BADHON workflow steps.
+                    {donorAvailable
+                      ? "Your profile can be considered when compatible donors are searched."
+                      : "Turn on availability from your donor profile when you are ready to donate."}
                   </p>
                 </div>
               </div>
