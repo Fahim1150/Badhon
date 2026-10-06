@@ -1416,3 +1416,74 @@
     padding: 15px;
   }
 }
+
+
+/* Segment 2 Part 1 — Donor availability */
+.donor-availability-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 0 0 24px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.donor-availability-banner.is-available {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.donor-availability-banner.is-unavailable {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.donor-availability-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.is-available .donor-availability-dot {
+  background: #16a34a;
+}
+
+.is-unavailable .donor-availability-dot {
+  background: #ea580c;
+}
+
+.donor-availability-banner strong {
+  display: block;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.donor-availability-banner p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.availability-checkbox span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.availability-checkbox small {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+@media (max-width: 600px) {
+  .donor-availability-banner {
+    padding: 14px;
+  }
+}
