@@ -848,7 +848,7 @@ function DonorProfile() {
     bloodGroup: "",
     phone: "",
     district: "",
-    available: true,
+    available: false,
   });
 
   const [loading, setLoading] = useState(true);
@@ -882,6 +882,13 @@ function DonorProfile() {
 
         if (response.status === 404) {
           setProfileExists(false);
+          return;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem("badhon_token");
+          localStorage.removeItem("badhon_user");
+          goTo("/login");
           return;
         }
 
@@ -923,6 +930,25 @@ function DonorProfile() {
 
     setMessage("");
     setError("");
+
+    const phone = form.phone.trim();
+    const district = form.district.trim();
+
+    if (!form.bloodGroup) {
+      setError("Please select your blood group.");
+      return;
+    }
+
+    if (!/^01\d{9}$/.test(phone)) {
+      setError("Please enter a valid Bangladesh mobile number (01XXXXXXXXX).");
+      return;
+    }
+
+    if (district.length < 2) {
+      setError("Please enter your district or location.");
+      return;
+    }
+
     setSaving(true);
 
     const token = localStorage.getItem("badhon_token");
@@ -946,9 +972,9 @@ function DonorProfile() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          phone: form.phone,
+          phone,
           bloodGroup: form.bloodGroup,
-          district: form.district,
+          district,
           available: form.available,
         }),
       });
@@ -1068,6 +1094,9 @@ function DonorProfile() {
                   value={form.phone}
                   onChange={handleChange}
                   placeholder="01XXXXXXXXX"
+                  inputMode="numeric"
+                  maxLength={11}
+                  autoComplete="tel"
                   required
                 />
               </div>
@@ -1102,7 +1131,10 @@ function DonorProfile() {
               />
 
               <span>
-                I am currently available to donate blood
+                <strong>I am currently available to donate blood</strong>
+                <small>
+                  Turn this off whenever you are not available.
+                </small>
               </span>
             </label>
           </section>
