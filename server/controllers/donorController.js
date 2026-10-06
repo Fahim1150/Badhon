@@ -54,7 +54,7 @@ const createDonor = async (req, res) => {
             available:
                 typeof available === "boolean"
                     ? available
-                    : true,
+                    : false,
         });
 
         res.status(201).json(donor);
@@ -124,7 +124,7 @@ const updateMyDonorProfile = async (req, res) => {
                 available:
                     typeof available === "boolean"
                         ? available
-                        : true,
+                        : false,
             },
             { new: true, runValidators: true }
         );
