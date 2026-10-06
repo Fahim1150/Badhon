@@ -52,13 +52,11 @@ function Header() {
   const token = localStorage.getItem("badhon_token");
 
   const handleLogout = () => {
-    localStorage.removeItem("badhon_token");
-    localStorage.removeItem("badhon_user");
+  localStorage.removeItem("badhon_token");
+  localStorage.removeItem("badhon_user");
 
-    window.history.pushState({}, "", "/");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
+  window.location.href = "/";
+};
   const goTo = (path) => {
     window.history.pushState({}, "", path);
     window.dispatchEvent(new PopStateEvent("popstate"));
