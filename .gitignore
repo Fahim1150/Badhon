@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 server/.env
+.env
+.env.*
+!.env.production.example
+backups/

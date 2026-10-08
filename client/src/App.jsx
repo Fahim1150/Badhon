@@ -42,6 +42,19 @@ function isDonorProfileComplete(profile) {
   );
 }
 
+function getEligibilityDate(lastDonationDate) {
+  if (!lastDonationDate) return null;
+
+  const eligibilityDate = new Date(`${lastDonationDate}T00:00:00.000Z`);
+  eligibilityDate.setUTCDate(eligibilityDate.getUTCDate() + 90);
+  return eligibilityDate.toISOString().slice(0, 10);
+}
+
+function isDonorEligible(lastDonationDate) {
+  const eligibilityDate = getEligibilityDate(lastDonationDate);
+  return !eligibilityDate || eligibilityDate <= new Date().toISOString().slice(0, 10);
+}
+
 /* ---------- Shared UI ---------- */
 
 function Logo() {
@@ -1154,6 +1167,7 @@ function DonorProfile() {
     bloodGroup: "",
     phone: "",
     district: "",
+    lastDonationDate: "",
     available: false,
   });
 
@@ -1215,6 +1229,9 @@ function DonorProfile() {
           bloodGroup: data.bloodGroup || "",
           phone: data.phone || "",
           district: data.district || "",
+          lastDonationDate: data.lastDonationDate
+            ? new Date(data.lastDonationDate).toISOString().slice(0, 10)
+            : "",
           available: isDonorProfileComplete(data) && data.available === true,
         });
 
@@ -1241,6 +1258,10 @@ function DonorProfile() {
       };
 
       if (!isDonorProfileComplete(updated)) {
+        updated.available = false;
+      }
+
+      if (!isDonorEligible(updated.lastDonationDate)) {
         updated.available = false;
       }
 
@@ -1298,6 +1319,7 @@ function DonorProfile() {
           phone,
           bloodGroup: form.bloodGroup,
           district,
+          lastDonationDate: form.lastDonationDate || null,
           available: form.available,
         }),
       });
@@ -1317,6 +1339,9 @@ function DonorProfile() {
         bloodGroup: data.bloodGroup || "",
         phone: data.phone || "",
         district: data.district || "",
+        lastDonationDate: data.lastDonationDate
+          ? new Date(data.lastDonationDate).toISOString().slice(0, 10)
+          : "",
         available: isDonorProfileComplete(data) && data.available === true,
       });
 
@@ -1364,6 +1389,9 @@ function DonorProfile() {
     );
   }
 
+  const eligibilityDate = getEligibilityDate(form.lastDonationDate);
+  const donorEligible = isDonorEligible(form.lastDonationDate);
+
   return (
     <main className="donor-page">
       <div className="donor-container">
@@ -1391,21 +1419,27 @@ function DonorProfile() {
           aria-live="polite"
         >
           <span className="donor-readiness-icon" aria-hidden="true">
-            {isDonorProfileComplete(form) ? (form.available ? "✓" : "•") : "!"}
+            {isDonorProfileComplete(form) && donorEligible
+              ? form.available ? "✓" : "•"
+              : "!"}
           </span>
           <div>
             <strong>
               {!isDonorProfileComplete(form)
                 ? "Profile incomplete"
-                : form.available
-                  ? "Ready to donate"
+                : !donorEligible
+                  ? "Within estimated cooldown"
+                  : form.available
+                  ? "Listed as available"
                   : "Currently unavailable"}
             </strong>
             <p>
               {!isDonorProfileComplete(form)
                 ? "Add a valid blood group, Bangladesh mobile number, and location before turning on availability."
-                : form.available
-                  ? "Your complete profile is marked available to people looking for a donor."
+                : !donorEligible
+                  ? `A 90-day interval estimate places your next availability date on ${eligibilityDate}. Donation center screening determines actual eligibility.`
+                  : form.available
+                  ? "Your profile is marked available. A donation center will confirm eligibility through screening."
                   : "Your complete profile is saved, but you are not listed as available."}
             </p>
             {profile && (
@@ -1503,6 +1537,24 @@ function DonorProfile() {
                   required
                 />
               </div>
+
+              <div className="form-group">
+                <label htmlFor="lastDonationDate">
+                  Last Donation Date
+                </label>
+
+                <input
+                  id="lastDonationDate"
+                  type="date"
+                  name="lastDonationDate"
+                  value={form.lastDonationDate}
+                  onChange={handleChange}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
+                <small className="field-hint">
+                  Optional. A 90-day interval is only an estimate; your donation center determines eligibility.
+                </small>
+              </div>
             </div>
           </section>
 
@@ -1515,17 +1567,22 @@ function DonorProfile() {
                 name="available"
                 checked={form.available}
                 onChange={handleChange}
-                disabled={!isDonorProfileComplete(form) && !form.available}
-                aria-label="Available to donate blood"
+                disabled={
+                  (!isDonorProfileComplete(form) || !donorEligible) &&
+                  !form.available
+                }
+                aria-label="List my donor profile as available"
               />
 
               <span>
                 <strong>
-                  {form.available ? "Available to donate" : "Unavailable to donate"}
+                  {form.available ? "List me as available" : "Keep me unavailable"}
                 </strong>
                 <small>
                   {isDonorProfileComplete(form)
-                    ? "Turn availability off whenever you are not ready to donate."
+                    ? donorEligible
+                      ? "Turn availability off whenever you are not ready to donate."
+                      : `Availability returns on ${eligibilityDate}.`
                     : "Complete your donor information to enable this toggle."}
                 </small>
               </span>

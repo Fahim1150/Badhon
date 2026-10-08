@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { getJwtSecret } = require("../config/security");
 
 const register = async (req, res) => {
   try {
@@ -108,7 +109,7 @@ const login = async (req, res) => {
         userId: user._id,
         role: user.role,
       },
-      process.env.JWT_SECRET || "badhon-secret-key",
+      getJwtSecret(),
       {
         expiresIn: "1d",
       }

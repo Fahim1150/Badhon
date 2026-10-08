@@ -51,6 +51,11 @@ const donorSchema = new mongoose.Schema(
             minlength: 2,
         },
 
+        lastDonationDate: {
+            type: Date,
+            default: null,
+        },
+
         available: {
             type: Boolean,
             default: false,

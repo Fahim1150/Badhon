@@ -1,33 +1,79 @@
 services:
   mongodb:
     image: mongo:7
-    container_name: badhon-mongodb
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME in .env.production}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env.production}
+      MONGO_APP_USERNAME: ${MONGO_APP_USERNAME:?Set MONGO_APP_USERNAME in .env.production}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?Set MONGO_APP_PASSWORD in .env.production}
     volumes:
       - mongo_data:/data/db
+      - ./server/config/mongo-init.js:/docker-entrypoint-initdb.d/10-create-app-user.js:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mongosh --quiet --username "$$MONGO_INITDB_ROOT_USERNAME" --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval 'db.adminCommand("ping").ok' | grep -q 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend
 
   server:
     build: ./server
-    container_name: web-lab-server
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
     environment:
+      NODE_ENV: production
       PORT: 3000
-      MONGO_URI: mongodb://mongodb:27017/badhon
-      JWT_SECRET: super-secret-jwt-key
-    depends_on: 
-      - mongodb
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN in .env.production}
+      MONGO_URI: ${MONGO_URI:?Set authenticated MONGO_URI in .env.production}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+      - frontend
 
   client:
-    build: ./client
-    container_name: web-lab-client
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.production}
+      NGINX_ENVSUBST_FILTER: ^DOMAIN$
+      TLS_CERT_PATH: ${TLS_CERT_PATH:?Set TLS_CERT_PATH in .env.production}
+      TLS_KEY_PATH: ${TLS_KEY_PATH:?Set TLS_KEY_PATH in .env.production}
+    volumes:
+      - ${TLS_CERT_PATH:?Set TLS_CERT_PATH in .env.production}:/etc/nginx/ssl/tls.crt:ro
+      - ${TLS_KEY_PATH:?Set TLS_KEY_PATH in .env.production}:/etc/nginx/ssl/tls.key:ro
     ports:
       - "80:80"
       - "443:443"
     depends_on:
-      - server
+      server:
+        condition: service_healthy
+    networks:
+      - frontend
 
 volumes:
   mongo_data:
+
+networks:
+  backend:
+    internal: true
+  frontend:

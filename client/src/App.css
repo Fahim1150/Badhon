@@ -1109,6 +1109,12 @@
   font-size: 14px;
 }
 
+.field-hint {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .form-group input,
 .form-group select {
   width: 100%;

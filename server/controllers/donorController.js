@@ -6,9 +6,60 @@ const isCompleteDonorProfile = (donor) =>
     /^01\d{9}$/.test((donor.phone || "").trim()) &&
     (donor.district || "").trim().length >= 2;
 
+const getEligibility = (lastDonationDate) => {
+    if (!lastDonationDate) {
+        return { eligible: true, eligibleOn: null };
+    }
+
+    const donationDate = new Date(lastDonationDate);
+    const eligibleOnDate = new Date(donationDate);
+    eligibleOnDate.setUTCDate(eligibleOnDate.getUTCDate() + 90);
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    return {
+        eligible: eligibleOnDate <= today,
+        eligibleOn: eligibleOnDate.toISOString().slice(0, 10),
+    };
+};
+
+const parseLastDonationDate = (value) => {
+    if (value === undefined || value === null || value === "") {
+        return { value: null };
+    }
+
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return { error: "Please provide a valid last donation date" };
+    }
+
+    const parsedDate = new Date(`${value}T00:00:00.000Z`);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    if (
+        Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0, 10) !== value
+    ) {
+        return { error: "Please provide a valid last donation date" };
+    }
+
+    if (parsedDate > today) {
+        return { error: "Last donation date cannot be in the future" };
+    }
+
+    return { value: parsedDate };
+};
+
 const donorResponse = (donor) => {
     const response = donor.toObject();
-    response.available = response.available === true && isCompleteDonorProfile(response);
+    const eligibility = getEligibility(response.lastDonationDate);
+    response.eligible = eligibility.eligible;
+    response.eligibleOn = eligibility.eligibleOn;
+    response.available =
+        response.available === true &&
+        isCompleteDonorProfile(response) &&
+        eligibility.eligible;
     return response;
 };
 
@@ -19,6 +70,7 @@ const createDonor = async (req, res) => {
             phone,
             bloodGroup,
             district,
+            lastDonationDate,
             available,
         } = req.body;
 
@@ -49,6 +101,12 @@ const createDonor = async (req, res) => {
             });
         }
 
+        const parsedDonationDate = parseLastDonationDate(lastDonationDate);
+
+        if (parsedDonationDate.error) {
+            return res.status(400).json({ message: parsedDonationDate.error });
+        }
+
         const user = await User.findById(req.user.userId);
 
         if (!user) {
@@ -74,13 +132,11 @@ const createDonor = async (req, res) => {
             phone: normalizedPhone,
             bloodGroup,
             district: normalizedDistrict,
-            available:
-                typeof available === "boolean"
-                    ? available
-                    : false,
+            lastDonationDate: parsedDonationDate.value,
+            available: available === true && getEligibility(parsedDonationDate.value).eligible,
         });
 
-        res.status(201).json(donor);
+        res.status(201).json(donorResponse(donor));
     } catch (error) {
         console.error("Create donor error:", error.message);
 
@@ -120,6 +176,7 @@ const updateMyDonorProfile = async (req, res) => {
             phone,
             bloodGroup,
             district,
+            lastDonationDate,
             available,
         } = req.body;
 
@@ -150,16 +207,37 @@ const updateMyDonorProfile = async (req, res) => {
             });
         }
 
+        const hasDonationDate = Object.prototype.hasOwnProperty.call(
+            req.body,
+            "lastDonationDate"
+        );
+        const parsedDonationDate = hasDonationDate
+            ? parseLastDonationDate(lastDonationDate)
+            : null;
+
+        if (parsedDonationDate?.error) {
+            return res.status(400).json({ message: parsedDonationDate.error });
+        }
+
+        const currentDonor = await Donor.findOne({ user: req.user.userId });
+
+        if (!currentDonor) {
+            return res.status(404).json({ message: "Donor profile not found" });
+        }
+
+        const effectiveDonationDate = hasDonationDate
+            ? parsedDonationDate.value
+            : currentDonor.lastDonationDate;
+        const eligible = getEligibility(effectiveDonationDate).eligible;
+
         const donor = await Donor.findOneAndUpdate(
             { user: req.user.userId },
             {
                 phone: normalizedPhone,
                 bloodGroup,
                 district: normalizedDistrict,
-                available:
-                    typeof available === "boolean"
-                        ? available
-                        : false,
+                ...(hasDonationDate && { lastDonationDate: parsedDonationDate.value }),
+                available: available === true && eligible,
             },
             { new: true, runValidators: true }
         );
@@ -170,7 +248,7 @@ const updateMyDonorProfile = async (req, res) => {
             });
         }
 
-        res.status(200).json(donor);
+        res.status(200).json(donorResponse(donor));
     } catch (error) {
         console.error("Update donor profile error:", error.message);
 

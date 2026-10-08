@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { getJwtSecret } = require("../config/security");
 
 const getMyProfile = async (req, res) => {
     try {
@@ -180,7 +181,7 @@ const loginUser = async (req, res) => {
                 User_ID: user.User_ID,
                 Role: user.Role,
             },
-            process.env.JWT_SECRET,
+            getJwtSecret(),
             {
                 expiresIn: "1d",
             }

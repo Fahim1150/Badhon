@@ -1,5 +1,9 @@
 require("dotenv").config()
 
+const { validateProductionEnvironment } = require("./config/security");
+
+validateProductionEnvironment();
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -11,12 +15,14 @@ const app = express();
 
 app.use(helmet());
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:8080",
-  "https://localhost",
-  "https://badhon.mooo.com"
-];
+const allowedOrigins = process.env.NODE_ENV === "production"
+  ? [process.env.APP_ORIGIN].filter(Boolean)
+  : [
+      "http://localhost:5173",
+      "http://localhost:8080",
+      "https://localhost",
+      process.env.APP_ORIGIN,
+    ].filter(Boolean);
 
 app.use(
   cors({
