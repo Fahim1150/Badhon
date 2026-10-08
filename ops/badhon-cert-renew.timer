@@ -1,0 +1,11 @@
+[Unit]
+Description=Check daily for a BADHON TLS certificate renewal
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=badhon-cert-renew.service
+
+[Install]
+WantedBy=timers.target

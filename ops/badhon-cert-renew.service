@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew the BADHON TLS certificate
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/badhon
+ExecStart=/bin/sh /opt/badhon/ops/renew-certificates.sh

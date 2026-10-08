@@ -10,6 +10,8 @@ services:
     volumes:
       - mongo_data:/data/db
       - ./server/config/mongo-init.js:/docker-entrypoint-initdb.d/10-create-app-user.js:ro
+    ports:
+      - "127.0.0.1:27017:27017"
     healthcheck:
       test:
         - CMD-SHELL

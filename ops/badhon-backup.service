@@ -1,0 +1,17 @@
+[Unit]
+Description=Create and upload an encrypted BADHON MongoDB backup
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/badhon
+EnvironmentFile=/etc/badhon/backup.env
+ExecStart=/opt/badhon/ops/backup-mongodb.sh
+TimeoutStartSec=infinity
+UMask=0077
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/badhon
+NoNewPrivileges=true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the BADHON MongoDB backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=badhon-backup.service
+
+[Install]
+WantedBy=timers.target
