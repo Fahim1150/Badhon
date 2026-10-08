@@ -4,7 +4,7 @@ const User = require("../models/User");
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     // Validate required fields
     if (
@@ -47,7 +47,7 @@ const register = async (req, res) => {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
-      role: role === "ADMIN" ? "ADMIN" : "USER",
+      role: "USER",
     });
 
     res.status(201).json({

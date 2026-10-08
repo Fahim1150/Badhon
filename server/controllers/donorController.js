@@ -1,6 +1,17 @@
 const Donor = require("../models/Donor");
 const User = require("../models/User");
 
+const isCompleteDonorProfile = (donor) =>
+    Donor.schema.path("bloodGroup").enumValues.includes(donor.bloodGroup) &&
+    /^01\d{9}$/.test((donor.phone || "").trim()) &&
+    (donor.district || "").trim().length >= 2;
+
+const donorResponse = (donor) => {
+    const response = donor.toObject();
+    response.available = response.available === true && isCompleteDonorProfile(response);
+    return response;
+};
+
 // CREATE
 const createDonor = async (req, res) => {
     try {
@@ -14,15 +25,27 @@ const createDonor = async (req, res) => {
         const normalizedPhone = String(phone || "").trim();
         const normalizedDistrict = String(district || "").trim();
 
-        if (!normalizedPhone || !bloodGroup || !normalizedDistrict) {
+        if (!normalizedPhone || !bloodGroup || normalizedDistrict.length < 2) {
             return res.status(400).json({
                 message: "Phone, blood group and district are required",
             });
         }
 
-        if (!/^01\\d{9}$/.test(normalizedPhone)) {
+        if (!/^01\d{9}$/.test(normalizedPhone)) {
             return res.status(400).json({
                 message: "Please provide a valid Bangladesh mobile number",
+            });
+        }
+
+        if (!Donor.schema.path("bloodGroup").enumValues.includes(bloodGroup)) {
+            return res.status(400).json({
+                message: "Please select a valid blood group",
+            });
+        }
+
+        if (available !== undefined && typeof available !== "boolean") {
+            return res.status(400).json({
+                message: "Availability must be true or false",
             });
         }
 
@@ -80,7 +103,7 @@ const getMyDonorProfile = async (req, res) => {
             });
         }
 
-        res.status(200).json(donor);
+        res.status(200).json(donorResponse(donor));
     } catch (error) {
         console.error("Get donor profile error:", error.message);
 
@@ -103,15 +126,27 @@ const updateMyDonorProfile = async (req, res) => {
         const normalizedPhone = String(phone || "").trim();
         const normalizedDistrict = String(district || "").trim();
 
-        if (!normalizedPhone || !bloodGroup || !normalizedDistrict) {
+        if (!normalizedPhone || !bloodGroup || normalizedDistrict.length < 2) {
             return res.status(400).json({
                 message: "Phone, blood group and district are required",
             });
         }
 
-        if (!/^01\\d{9}$/.test(normalizedPhone)) {
+        if (!/^01\d{9}$/.test(normalizedPhone)) {
             return res.status(400).json({
                 message: "Please provide a valid Bangladesh mobile number",
+            });
+        }
+
+        if (!Donor.schema.path("bloodGroup").enumValues.includes(bloodGroup)) {
+            return res.status(400).json({
+                message: "Please select a valid blood group",
+            });
+        }
+
+        if (available !== undefined && typeof available !== "boolean") {
+            return res.status(400).json({
+                message: "Availability must be true or false",
             });
         }
 
@@ -149,7 +184,7 @@ const updateMyDonorProfile = async (req, res) => {
 const getDonors = async (req, res) => {
     try {
         const donors = await Donor.find().sort({ createdAt: -1 });
-        res.status(200).json(donors);
+        res.status(200).json(donors.map(donorResponse));
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -164,7 +199,7 @@ const getDonorById = async (req, res) => {
             return res.status(404).json({ message: "Donor not found" });
         }
 
-        res.status(200).json(donor);
+        res.status(200).json(donorResponse(donor));
     } catch (error) {
         res.status(400).json({ message: "Invalid donor ID" });
     }

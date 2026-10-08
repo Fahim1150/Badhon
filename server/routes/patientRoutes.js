@@ -3,6 +3,8 @@ const authorizeRoles = require("../middleware/roleMiddleware");
 const express = require("express");
 
 const {
+  getMyPatient,
+  saveMyPatient,
   createPatient,
   getPatients,
   getPatientById,
@@ -12,17 +14,15 @@ const {
 
 const router = express.Router();
 
-// Create a patient
-router.post("/", authMiddleware, createPatient);
+router.get("/me", authMiddleware, getMyPatient);
+router.put("/me", authMiddleware, saveMyPatient);
 
-// Get all patients
-router.get("/", authMiddleware, getPatients);
+router.post("/", authMiddleware, authorizeRoles("ADMIN"), createPatient);
+router.get("/", authMiddleware, authorizeRoles("ADMIN"), getPatients);
 
-// Get a patient by ID
-router.get("/:id", authMiddleware, getPatientById);
+router.get("/:id", authMiddleware, authorizeRoles("ADMIN"), getPatientById);
 
-// Update a patient
-router.put("/:id", authMiddleware, updatePatient);
+router.put("/:id", authMiddleware, authorizeRoles("ADMIN"), updatePatient);
 
 // Delete a patient - ADMIN only
 router.delete(

@@ -26,6 +26,7 @@ const donorSchema = new mongoose.Schema(
             type: String,
             required: true,
             trim: true,
+            match: /^01\d{9}$/,
         },
 
         bloodGroup: {
@@ -47,6 +48,7 @@ const donorSchema = new mongoose.Schema(
             type: String,
             required: true,
             trim: true,
+            minlength: 2,
         },
 
         available: {

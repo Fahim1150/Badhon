@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const patientSchema = new mongoose.Schema(
   {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      unique: true,
+      sparse: true,
+    },
+
     name: {
       type: String,
       required: true,
@@ -31,6 +38,7 @@ const patientSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      match: /^01\d{9}$/,
     },
 
     address: {
@@ -49,6 +57,7 @@ const patientSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      match: /^01\d{9}$/,
     },
   },
   { timestamps: true }

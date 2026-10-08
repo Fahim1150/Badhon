@@ -14,20 +14,32 @@ function navigate(path) {
 
 async function apiRequest(endpoint, options = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-    ...options,
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || "Something went wrong");
+    const error = new Error(data.message || "Something went wrong");
+    error.status = response.status;
+    throw error;
   }
 
   return data;
+}
+
+const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
+function isDonorProfileComplete(profile) {
+  return (
+    bloodGroups.includes(profile?.bloodGroup) &&
+    /^01\d{9}$/.test((profile?.phone || "").trim()) &&
+    (profile?.district || "").trim().length >= 2
+  );
 }
 
 /* ---------- Shared UI ---------- */
@@ -525,7 +537,7 @@ function AuthPage({ mode }) {
 /* ---------- Dashboard ---------- */
 
 function Dashboard() {
-  const [user, setUser] = useState(() => {
+  const [user] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("badhon_user") || "{}");
     } catch {
@@ -576,8 +588,9 @@ function Dashboard() {
           throw new Error(data.message || "Unable to load donor status");
         }
 
-        setDonorAvailable(data.available === true);
-        setDonorStatus("complete");
+        const profileComplete = isDonorProfileComplete(data);
+        setDonorAvailable(profileComplete && data.available === true);
+        setDonorStatus(profileComplete ? "complete" : "incomplete");
       } catch (err) {
         setDonorStatus("error");
         setDonorError(err.message || "Unable to load donor status");
@@ -846,7 +859,291 @@ function Dashboard() {
               <strong>{displayRole}</strong>
             </div>
           </div>
+          <button
+            className="dashboard-button account-edit-button"
+            onClick={() => goTo("/profile")}
+          >
+            Manage user and patient information
+          </button>
         </section>
+      </div>
+    </main>
+  );
+}
+
+function ProfileManagement() {
+  const [account, setAccount] = useState({ name: "", email: "" });
+  const [patient, setPatient] = useState({
+    name: "",
+    age: "",
+    gender: "",
+    bloodGroup: "",
+    phone: "",
+    address: "",
+    disease: "",
+    emergencyContact: "",
+  });
+  const [patientExists, setPatientExists] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [savingPatient, setSavingPatient] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadError, setLoadError] = useState("");
+  const [accountMessage, setAccountMessage] = useState("");
+  const [patientMessage, setPatientMessage] = useState("");
+  const [accountError, setAccountError] = useState("");
+  const [patientError, setPatientError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfiles = async () => {
+      setLoading(true);
+      setLoadError("");
+
+      try {
+        const token = localStorage.getItem("badhon_token");
+        const headers = { Authorization: `Bearer ${token}` };
+        const userData = await apiRequest("/users/me", { headers });
+        let patientData = null;
+
+        try {
+          patientData = await apiRequest("/patients/me", { headers });
+        } catch (error) {
+          if (error.status !== 404) {
+            throw error;
+          }
+        }
+
+        if (!active) return;
+
+        setAccount({ name: userData.name || "", email: userData.email || "" });
+        if (patientData) {
+          setPatient({
+            name: patientData.name || "",
+            age: patientData.age ?? "",
+            gender: patientData.gender || "",
+            bloodGroup: patientData.bloodGroup || "",
+            phone: patientData.phone || "",
+            address: patientData.address || "",
+            disease: patientData.disease || "",
+            emergencyContact: patientData.emergencyContact || "",
+          });
+          setPatientExists(true);
+        } else {
+          setPatientExists(false);
+        }
+      } catch (error) {
+        if (active) setLoadError(error.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadProfiles();
+    return () => {
+      active = false;
+    };
+  }, [loadAttempt]);
+
+  const handleAccountChange = (event) => {
+    setAccount((current) => ({ ...current, [event.target.name]: event.target.value }));
+  };
+
+  const handlePatientChange = (event) => {
+    setPatient((current) => ({ ...current, [event.target.name]: event.target.value }));
+  };
+
+  const saveAccount = async (event) => {
+    event.preventDefault();
+    setAccountError("");
+    setAccountMessage("");
+    setSavingAccount(true);
+
+    try {
+      const updated = await apiRequest("/users/me", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${localStorage.getItem("badhon_token")}` },
+        body: JSON.stringify(account),
+      });
+      let storedUser = {};
+      try {
+        storedUser = JSON.parse(localStorage.getItem("badhon_user") || "{}");
+      } catch {
+        storedUser = {};
+      }
+      localStorage.setItem("badhon_user", JSON.stringify({
+        ...storedUser,
+        id: updated._id,
+        name: updated.name,
+        email: updated.email,
+        role: updated.role,
+      }));
+      setAccount({ name: updated.name, email: updated.email });
+      setAccountMessage("Account information updated.");
+    } catch (error) {
+      setAccountError(error.message);
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const savePatient = async (event) => {
+    event.preventDefault();
+    setPatientError("");
+    setPatientMessage("");
+
+    if (!/^01\d{9}$/.test(patient.phone.trim())) {
+      setPatientError("Enter a valid Bangladesh mobile number (01XXXXXXXXX).");
+      return;
+    }
+
+    if (!/^01\d{9}$/.test(patient.emergencyContact.trim())) {
+      setPatientError("Enter a valid emergency contact (01XXXXXXXXX).");
+      return;
+    }
+
+    setSavingPatient(true);
+
+    try {
+      const response = await apiRequest("/patients/me", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${localStorage.getItem("badhon_token")}` },
+        body: JSON.stringify({ ...patient, age: Number(patient.age) }),
+      });
+      setPatientExists(true);
+      setPatient({
+        ...response.data,
+        age: String(response.data.age),
+      });
+      setPatientMessage("Patient information saved.");
+    } catch (error) {
+      setPatientError(error.message);
+    } finally {
+      setSavingPatient(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="profile-page">
+        <div className="container profile-container" role="status">
+          <span className="state-spinner" aria-hidden="true" />
+          <p>Loading your information...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="profile-page">
+        <div className="container profile-container">
+          <h1>We couldn't load your information</h1>
+          <div className="form-error" role="alert">{loadError}</div>
+          <button className="dashboard-button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+            Try again
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="profile-page">
+      <div className="container profile-container">
+        <header className="profile-header">
+          <p className="dashboard-eyebrow">Your information</p>
+          <h1>Manage your profile</h1>
+          <p>Update your account details and the patient information used for blood requests.</p>
+        </header>
+
+        <form className="profile-card" onSubmit={saveAccount}>
+          <div className="profile-card-heading">
+            <div>
+              <h2>Account information</h2>
+              <p>These details are used to identify your BADHON account.</p>
+            </div>
+          </div>
+          {accountMessage && <div className="form-success" role="status">{accountMessage}</div>}
+          {accountError && <div className="form-error" role="alert">{accountError}</div>}
+          <div className="profile-fields">
+            <div className="form-group">
+              <label htmlFor="account-name">Full name</label>
+              <input id="account-name" name="name" value={account.name} onChange={handleAccountChange} minLength={2} maxLength={100} required autoComplete="name" />
+            </div>
+            <div className="form-group">
+              <label htmlFor="account-email">Email</label>
+              <input id="account-email" name="email" type="email" value={account.email} onChange={handleAccountChange} required autoComplete="email" />
+            </div>
+          </div>
+          <div className="profile-actions">
+            <button className="dashboard-button" type="submit" disabled={savingAccount}>
+              {savingAccount ? "Saving..." : "Save account information"}
+            </button>
+          </div>
+        </form>
+
+        <form className="profile-card" onSubmit={savePatient}>
+          <div className="profile-card-heading">
+            <div>
+              <h2>Patient information</h2>
+              <p>{patientExists ? "Update the patient details on your account." : "No patient profile yet. Add details to prepare your patient information."}</p>
+            </div>
+            <span className={`profile-record-badge ${patientExists ? "profile-record-saved" : ""}`}>
+              {patientExists ? "Saved" : "Not set up"}
+            </span>
+          </div>
+          {patientMessage && <div className="form-success" role="status">{patientMessage}</div>}
+          {patientError && <div className="form-error" role="alert">{patientError}</div>}
+          <div className="profile-fields">
+            <div className="form-group">
+              <label htmlFor="patient-name">Patient full name</label>
+              <input id="patient-name" name="name" value={patient.name} onChange={handlePatientChange} required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="patient-age">Age</label>
+              <input id="patient-age" name="age" type="number" min="0" max="150" value={patient.age} onChange={handlePatientChange} required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="patient-gender">Gender</label>
+              <select id="patient-gender" name="gender" value={patient.gender} onChange={handlePatientChange} required>
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="patient-blood-group">Blood group</label>
+              <select id="patient-blood-group" name="bloodGroup" value={patient.bloodGroup} onChange={handlePatientChange} required>
+                <option value="">Select blood group</option>
+                {bloodGroups.map((group) => <option key={group} value={group}>{group}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="patient-phone">Phone</label>
+              <input id="patient-phone" name="phone" type="tel" value={patient.phone} onChange={handlePatientChange} placeholder="01XXXXXXXXX" inputMode="numeric" maxLength={11} required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="patient-emergency-contact">Emergency contact</label>
+              <input id="patient-emergency-contact" name="emergencyContact" type="tel" value={patient.emergencyContact} onChange={handlePatientChange} placeholder="01XXXXXXXXX" inputMode="numeric" maxLength={11} required />
+            </div>
+            <div className="form-group profile-field-wide">
+              <label htmlFor="patient-address">Address / location</label>
+              <input id="patient-address" name="address" value={patient.address} onChange={handlePatientChange} minLength={2} required />
+            </div>
+            <div className="form-group profile-field-wide">
+              <label htmlFor="patient-disease">Reason for request / condition</label>
+              <textarea id="patient-disease" name="disease" value={patient.disease} onChange={handlePatientChange} rows="3" required />
+            </div>
+          </div>
+          <div className="profile-actions">
+            <button className="dashboard-button" type="submit" disabled={savingPatient}>
+              {savingPatient ? "Saving..." : patientExists ? "Update patient information" : "Save patient information"}
+            </button>
+          </div>
+        </form>
       </div>
     </main>
   );
@@ -863,6 +1160,9 @@ function DonorProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadError, setLoadError] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -873,6 +1173,10 @@ function DonorProfile() {
 
   useEffect(() => {
     const loadDonorProfile = async () => {
+      setLoading(true);
+      setLoadError(false);
+      setError("");
+
       const token = localStorage.getItem("badhon_token");
 
       if (!token) {
@@ -911,27 +1215,37 @@ function DonorProfile() {
           bloodGroup: data.bloodGroup || "",
           phone: data.phone || "",
           district: data.district || "",
-          available: data.available ?? true,
+          available: isDonorProfileComplete(data) && data.available === true,
         });
 
+        setProfile(data);
         setProfileExists(true);
       } catch (err) {
         setError(err.message);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     };
 
     loadDonorProfile();
-  }, []);
+  }, [loadAttempt]);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
 
-    setForm((previous) => ({
-      ...previous,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    setForm((previous) => {
+      const updated = {
+        ...previous,
+        [name]: type === "checkbox" ? checked : value,
+      };
+
+      if (!isDonorProfileComplete(updated)) {
+        updated.available = false;
+      }
+
+      return updated;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -943,7 +1257,7 @@ function DonorProfile() {
     const phone = form.phone.trim();
     const district = form.district.trim();
 
-    if (!form.bloodGroup) {
+    if (!bloodGroups.includes(form.bloodGroup)) {
       setError("Please select your blood group.");
       return;
     }
@@ -997,12 +1311,13 @@ function DonorProfile() {
       }
 
       setProfileExists(true);
+      setProfile(data);
 
       setForm({
         bloodGroup: data.bloodGroup || "",
         phone: data.phone || "",
         district: data.district || "",
-        available: data.available ?? true,
+        available: isDonorProfileComplete(data) && data.available === true,
       });
 
       setMessage(
@@ -1020,8 +1335,30 @@ function DonorProfile() {
   if (loading) {
     return (
       <main className="donor-page">
+        <div className="donor-container donor-loading" role="status">
+          <span className="state-spinner" aria-hidden="true" />
+          <p>Loading your donor profile...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="donor-page">
         <div className="donor-container">
-          <p>Loading donor profile...</p>
+          <div className="donor-header">
+            <p className="dashboard-eyebrow">Donor Profile</p>
+            <h1>We couldn't load your profile</h1>
+          </div>
+          <div className="form-error" role="alert">{error}</div>
+          <button
+            type="button"
+            className="dashboard-button"
+            onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+          >
+            Try again
+          </button>
         </div>
       </main>
     );
@@ -1045,6 +1382,40 @@ function DonorProfile() {
           </p>
         </div>
 
+        <section
+          className={`donor-readiness ${
+            isDonorProfileComplete(form) && form.available
+              ? "donor-readiness-available"
+              : ""
+          }`}
+          aria-live="polite"
+        >
+          <span className="donor-readiness-icon" aria-hidden="true">
+            {isDonorProfileComplete(form) ? (form.available ? "✓" : "•") : "!"}
+          </span>
+          <div>
+            <strong>
+              {!isDonorProfileComplete(form)
+                ? "Profile incomplete"
+                : form.available
+                  ? "Ready to donate"
+                  : "Currently unavailable"}
+            </strong>
+            <p>
+              {!isDonorProfileComplete(form)
+                ? "Add a valid blood group, Bangladesh mobile number, and location before turning on availability."
+                : form.available
+                  ? "Your complete profile is marked available to people looking for a donor."
+                  : "Your complete profile is saved, but you are not listed as available."}
+            </p>
+            {profile && (
+              <small>
+                Donor: {profile.name} · {profile.email}
+              </small>
+            )}
+          </div>
+        </section>
+
         {message && (
           <div className="form-success">
             {message}
@@ -1054,6 +1425,13 @@ function DonorProfile() {
         {error && (
           <div className="form-error">
             {error}
+          </div>
+        )}
+
+        {!profileExists && !error && (
+          <div className="donor-empty-state">
+            <strong>Your donor profile is not set up yet.</strong>
+            <p>Complete the details below to create your profile. It will remain unavailable until you choose to turn availability on.</p>
           </div>
         )}
 
@@ -1137,12 +1515,18 @@ function DonorProfile() {
                 name="available"
                 checked={form.available}
                 onChange={handleChange}
+                disabled={!isDonorProfileComplete(form) && !form.available}
+                aria-label="Available to donate blood"
               />
 
               <span>
-                <strong>I am currently available to donate blood</strong>
+                <strong>
+                  {form.available ? "Available to donate" : "Unavailable to donate"}
+                </strong>
                 <small>
-                  Turn this off whenever you are not available.
+                  {isDonorProfileComplete(form)
+                    ? "Turn availability off whenever you are not ready to donate."
+                    : "Complete your donor information to enable this toggle."}
                 </small>
               </span>
             </label>
@@ -1209,6 +1593,15 @@ function App() {
 
   if (path === "/dashboard") {
     return <Dashboard />;
+  }
+
+  if (path === "/profile") {
+    if (!token) {
+      window.history.replaceState({}, "", "/login");
+      return <AuthPage mode="login" />;
+    }
+
+    return <ProfileManagement />;
   }
 
   if (path === "/donor") {

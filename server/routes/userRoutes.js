@@ -3,6 +3,8 @@ const authorizeRoles = require("../middleware/roleMiddleware");
 const express = require("express");
 
 const {
+    getMyProfile,
+    updateMyProfile,
     createUser,
     getUsers,
     getUserById,
@@ -13,12 +15,14 @@ const {
 
 const router = express.Router();
 
-router.post("/", authMiddleware, createUser);
-router.post("/login", authMiddleware, loginUser);
+router.get("/me", authMiddleware, getMyProfile);
+router.put("/me", authMiddleware, updateMyProfile);
+router.post("/", authMiddleware, authorizeRoles("ADMIN"), createUser);
+router.post("/login", loginUser);
 
-router.get("/", authMiddleware, getUsers);
-router.get("/:id", authMiddleware, getUserById);
-router.put("/:id", authMiddleware, updateUser);
+router.get("/", authMiddleware, authorizeRoles("ADMIN"), getUsers);
+router.get("/:id", authMiddleware, authorizeRoles("ADMIN"), getUserById);
+router.put("/:id", authMiddleware, authorizeRoles("ADMIN"), updateUser);
 
 router.delete(
     "/:id",
