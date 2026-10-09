@@ -13,13 +13,18 @@ function navigate(path) {
 }
 
 async function apiRequest(endpoint, options = {}) {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch {
+    throw new Error("Unable to connect. Check your connection and try again.");
+  }
 
   const data = await response.json().catch(() => ({}));
 
@@ -77,11 +82,12 @@ function Header() {
   const token = localStorage.getItem("badhon_token");
 
   const handleLogout = () => {
-  localStorage.removeItem("badhon_token");
-  localStorage.removeItem("badhon_user");
+    localStorage.removeItem("badhon_token");
+    localStorage.removeItem("badhon_user");
+    sessionStorage.setItem("badhon_notice", "You have been logged out.");
 
-  window.location.href = "/";
-};
+    window.location.href = "/";
+  };
   const goTo = (path) => {
     window.history.pushState({}, "", path);
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -160,12 +166,42 @@ function Footer() {
   );
 }
 
+function Feedback({ type, children }) {
+  const isError = type === "error";
+
+  return (
+    <div
+      className={`feedback-state feedback-${type}`}
+      role={isError ? "alert" : "status"}
+      aria-live={isError ? "assertive" : "polite"}
+    >
+      {children}
+    </div>
+  );
+}
+
 /* ---------- Home ---------- */
 
 function Home() {
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const message = sessionStorage.getItem("badhon_notice");
+    if (message) {
+      setNotice(message);
+      sessionStorage.removeItem("badhon_notice");
+    }
+  }, []);
+
   return (
     <div className="app">
       <Header />
+
+      {notice && (
+        <div className="container home-notice">
+          <Feedback type="success">{notice}</Feedback>
+        </div>
+      )}
 
       <main>
         <section id="home" className="hero-section">
@@ -458,10 +494,10 @@ function AuthPage({ mode }) {
           </p>
         </div>
 
-        {error && <div className="form-message error">{error}</div>}
+        {error && <Feedback type="error">{error}</Feedback>}
 
         {success && (
-          <div className="form-message success">{success}</div>
+          <Feedback type="success">{success}</Feedback>
         )}
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -577,34 +613,26 @@ function Dashboard() {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/donors/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const data = await apiRequest("/donors/me", {
+          headers: { Authorization: `Bearer ${token}` },
         });
 
-        const data = await response.json().catch(() => ({}));
-
-        if (response.status === 404) {
+        const profileComplete = isDonorProfileComplete(data);
+        setDonorAvailable(profileComplete && data.available === true);
+        setDonorStatus(profileComplete ? "complete" : "incomplete");
+      } catch (err) {
+        if (err.status === 404) {
           setDonorStatus("incomplete");
           return;
         }
 
-        if (response.status === 401 || response.status === 403) {
+        if (err.status === 401 || err.status === 403) {
           localStorage.removeItem("badhon_token");
           localStorage.removeItem("badhon_user");
           goTo("/login");
           return;
         }
 
-        if (!response.ok) {
-          throw new Error(data.message || "Unable to load donor status");
-        }
-
-        const profileComplete = isDonorProfileComplete(data);
-        setDonorAvailable(profileComplete && data.available === true);
-        setDonorStatus(profileComplete ? "complete" : "incomplete");
-      } catch (err) {
         setDonorStatus("error");
         setDonorError(err.message || "Unable to load donor status");
       }
@@ -613,9 +641,10 @@ function Dashboard() {
     loadDashboardData();
   }, []);
 
-  const displayName = user.name?.trim() || "User";
-  const displayEmail = user.email?.trim() || "Not available";
-  const displayRole = user.role?.trim() || "USER";
+  const displayName = user.name?.trim() || "";
+  const displayEmail = user.email?.trim() || "";
+  const displayRole = user.role?.trim() || "";
+  const hasAccountInformation = Boolean(displayName && displayEmail);
 
   return (
     <main className="dashboard-page">
@@ -623,14 +652,14 @@ function Dashboard() {
         <section className="dashboard-header">
           <div>
             <p className="dashboard-eyebrow">BADHON Dashboard</p>
-            <h1>Welcome, {displayName} 👋</h1>
+            <h1>{displayName ? `Welcome, ${displayName}` : "Welcome to BADHON"}</h1>
             <p className="dashboard-intro">
               Your BADHON account at a glance. Manage your profile and keep
               your donor information ready when it matters.
             </p>
           </div>
 
-          <div className="dashboard-role">{displayRole}</div>
+          <div className="dashboard-role">{displayRole || "Role not set"}</div>
         </section>
 
         <section className="dashboard-summary" aria-label="Account summary">
@@ -638,7 +667,9 @@ function Dashboard() {
             <span className="summary-icon">👤</span>
             <div>
               <span className="summary-label">Account</span>
-              <strong>Active</strong>
+              <strong className={hasAccountInformation ? "summary-success" : "summary-warning"}>
+                {hasAccountInformation ? "Active" : "Information needed"}
+              </strong>
             </div>
           </div>
 
@@ -664,7 +695,7 @@ function Dashboard() {
             <span className="summary-icon">🩸</span>
             <div>
               <span className="summary-label">Blood requests</span>
-              <strong className="summary-muted">Coming next</strong>
+              <strong className="summary-muted">No requests yet</strong>
             </div>
           </div>
         </section>
@@ -702,8 +733,8 @@ function Dashboard() {
               <div>
                 <strong>Find Blood</strong>
                 <span>
-                  Blood search and request matching will be available in the
-                  next workflow stage.
+                  No blood requests are available yet. Request matching will
+                  be added in the next project segment.
                 </span>
               </div>
               <span className="action-badge">Next</span>
@@ -714,8 +745,8 @@ function Dashboard() {
               <div>
                 <strong>My Requests</strong>
                 <span>
-                  Request history will appear here after the blood-request
-                  workflow is added.
+                  No request history yet. Your requests will appear here when
+                  the blood-request workflow is available.
                 </span>
               </div>
               <span className="action-badge">Next</span>
@@ -795,7 +826,7 @@ function Dashboard() {
             )}
 
             {donorStatus === "error" && (
-              <div className="dashboard-state">
+              <div className="dashboard-state" role="alert">
                 <span className="state-icon error-icon">!</span>
                 <div>
                   <strong>We couldn't check your donor profile.</strong>
@@ -861,17 +892,22 @@ function Dashboard() {
           <div className="account-info">
             <div>
               <span>Name</span>
-              <strong>{displayName}</strong>
+              <strong>{displayName || "Not provided"}</strong>
             </div>
             <div>
               <span>Email</span>
-              <strong>{displayEmail}</strong>
+              <strong>{displayEmail || "Not provided"}</strong>
             </div>
             <div>
               <span>Role</span>
-              <strong>{displayRole}</strong>
+              <strong>{displayRole || "Not available"}</strong>
             </div>
           </div>
+          {!hasAccountInformation && (
+            <Feedback type="warning">
+              Some account information is missing. Add your name and email to complete your account details.
+            </Feedback>
+          )}
           <button
             className="dashboard-button account-edit-button"
             onClick={() => goTo("/profile")}
@@ -1053,7 +1089,7 @@ function ProfileManagement() {
       <main className="profile-page">
         <div className="container profile-container">
           <h1>We couldn't load your information</h1>
-          <div className="form-error" role="alert">{loadError}</div>
+          <Feedback type="error">{loadError}</Feedback>
           <button className="dashboard-button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
             Try again
           </button>
@@ -1078,8 +1114,8 @@ function ProfileManagement() {
               <p>These details are used to identify your BADHON account.</p>
             </div>
           </div>
-          {accountMessage && <div className="form-success" role="status">{accountMessage}</div>}
-          {accountError && <div className="form-error" role="alert">{accountError}</div>}
+          {accountMessage && <Feedback type="success">{accountMessage}</Feedback>}
+          {accountError && <Feedback type="error">{accountError}</Feedback>}
           <div className="profile-fields">
             <div className="form-group">
               <label htmlFor="account-name">Full name</label>
@@ -1107,8 +1143,8 @@ function ProfileManagement() {
               {patientExists ? "Saved" : "Not set up"}
             </span>
           </div>
-          {patientMessage && <div className="form-success" role="status">{patientMessage}</div>}
-          {patientError && <div className="form-error" role="alert">{patientError}</div>}
+          {patientMessage && <Feedback type="success">{patientMessage}</Feedback>}
+          {patientError && <Feedback type="error">{patientError}</Feedback>}
           <div className="profile-fields">
             <div className="form-group">
               <label htmlFor="patient-name">Patient full name</label>
@@ -1199,31 +1235,9 @@ function DonorProfile() {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/donors/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const data = await apiRequest("/donors/me", {
+          headers: { Authorization: `Bearer ${token}` },
         });
-
-        const data = await response.json();
-
-        if (response.status === 404) {
-          setProfileExists(false);
-          return;
-        }
-
-        if (response.status === 401 || response.status === 403) {
-          localStorage.removeItem("badhon_token");
-          localStorage.removeItem("badhon_user");
-          goTo("/login");
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            data.message || "Failed to load donor profile"
-          );
-        }
 
         setForm({
           bloodGroup: data.bloodGroup || "",
@@ -1238,6 +1252,18 @@ function DonorProfile() {
         setProfile(data);
         setProfileExists(true);
       } catch (err) {
+        if (err.status === 404) {
+          setProfileExists(false);
+          return;
+        }
+
+        if (err.status === 401 || err.status === 403) {
+          localStorage.removeItem("badhon_token");
+          localStorage.removeItem("badhon_user");
+          goTo("/login");
+          return;
+        }
+
         setError(err.message);
         setLoadError(true);
       } finally {
@@ -1293,8 +1319,6 @@ function DonorProfile() {
       return;
     }
 
-    setSaving(true);
-
     const token = localStorage.getItem("badhon_token");
 
     if (!token) {
@@ -1302,19 +1326,14 @@ function DonorProfile() {
       return;
     }
 
-    try {
-      const url = profileExists
-        ? `${API_BASE}/donors/me`
-        : `${API_BASE}/donors`;
+    setSaving(true);
 
+    try {
       const method = profileExists ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const data = await apiRequest(profileExists ? "/donors/me" : "/donors", {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           phone,
           bloodGroup: form.bloodGroup,
@@ -1323,14 +1342,6 @@ function DonorProfile() {
           available: form.available,
         }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to save donor profile"
-        );
-      }
 
       setProfileExists(true);
       setProfile(data);
@@ -1351,6 +1362,13 @@ function DonorProfile() {
           : "Donor profile created successfully."
       );
     } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        localStorage.removeItem("badhon_token");
+        localStorage.removeItem("badhon_user");
+        goTo("/login");
+        return;
+      }
+
       setError(err.message);
     } finally {
       setSaving(false);
@@ -1376,7 +1394,7 @@ function DonorProfile() {
             <p className="dashboard-eyebrow">Donor Profile</p>
             <h1>We couldn't load your profile</h1>
           </div>
-          <div className="form-error" role="alert">{error}</div>
+          <Feedback type="error">{error}</Feedback>
           <button
             type="button"
             className="dashboard-button"
@@ -1451,15 +1469,11 @@ function DonorProfile() {
         </section>
 
         {message && (
-          <div className="form-success">
-            {message}
-          </div>
+          <Feedback type="success">{message}</Feedback>
         )}
 
         {error && (
-          <div className="form-error">
-            {error}
-          </div>
+          <Feedback type="error">{error}</Feedback>
         )}
 
         {!profileExists && !error && (
