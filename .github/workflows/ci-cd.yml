@@ -4,9 +4,16 @@ on:
   push:
     branches:
       - development
+  pull_request:
+    branches:
+      - development
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  client:
+    name: Validate client
     runs-on: ubuntu-latest
 
     steps:
@@ -15,28 +22,91 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
+      - name: Build client
+        working-directory: client
+        run: npm run build
+
+  server:
+    name: Validate server dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install production dependencies
+        working-directory: server
+        run: npm ci --omit=dev
+
+  api-tests:
+    name: Run API tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Install Newman
-        run: npm install -g newman
+        run: npm install --global newman
 
-      - name: Run API Tests
-        run: |
-          newman run test/JSONPlaceholder_API_50_Request_Test_Suite.postman_collection.json
+      - name: Run API tests
+        run: newman run test/JSONPlaceholder_API_50_Request_Test_Suite.postman_collection.json
 
-  # deploy:
-  #   needs: test
-  #   runs-on: ubuntu-latest
+  docker:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    needs:
+      - client
+      - server
 
-  #   steps:
-  #     - name: Deploy to VPS
-  #       uses: appleboy/ssh-action@v1.2.2
-  #       with:
-  #         host: ${{ secrets.VPS_HOST }}
-  #         username: ${{ secrets.VPS_USER }}
-  #         key: ${{ secrets.VPS_SSH_KEY }}
-  #         script: |
-  #           cd /root/web-lab
-  #           git pull origin development
-  #           docker compose down --remove-orphans
-  #           docker compose up -d --build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build client image
+        run: docker build --tag web-lab-client:ci ./client
+
+      - name: Build server image
+        run: docker build --tag web-lab-server:ci ./server
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs:
+      - api-tests
+      - docker
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/badhon
+            git pull --ff-only origin development
+            docker compose --env-file .env.production up -d --build --remove-orphans

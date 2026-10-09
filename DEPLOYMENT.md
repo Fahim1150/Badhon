@@ -36,6 +36,16 @@ docker compose --env-file .env.production up -d --build
 docker compose --env-file .env.production ps
 ```
 
+## Continuous Deployment
+
+The GitHub Actions workflow deploys automatically after the API tests and Docker image builds pass on a push to `development`. Pull requests run validation but do not deploy. Configure these GitHub Actions repository secrets:
+
+- `VPS_HOST`: public hostname or IP address of the VPS.
+- `VPS_USER`: SSH user with permission to update `/opt/badhon` and run Docker Compose.
+- `VPS_SSH_KEY`: private SSH key for that user.
+
+The VPS must have the `development` branch checked out at `/opt/badhon`, Docker Compose installed, and a correctly configured `/opt/badhon/.env.production` with valid TLS certificate files before the first workflow deployment. The deploy step fast-forwards the checkout and runs `docker compose --env-file .env.production up -d --build --remove-orphans`; it does not take the existing stack down first.
+
 Test renewal with `sudo certbot renew --dry-run`. Install the included systemd timer so Certbot stops the client only when this certificate is due, renews it using the standalone challenge, and restarts the client even if renewal fails:
 
 ```sh
