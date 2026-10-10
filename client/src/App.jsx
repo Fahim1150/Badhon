@@ -183,15 +183,15 @@ function Feedback({ type, children }) {
 /* ---------- Home ---------- */
 
 function Home() {
-  const [notice, setNotice] = useState("");
+  const [notice] = useState(() => {
+    return sessionStorage.getItem("badhon_notice") || "";
+  });
 
   useEffect(() => {
-    const message = sessionStorage.getItem("badhon_notice");
-    if (message) {
-      setNotice(message);
+    if (notice) {
       sessionStorage.removeItem("badhon_notice");
     }
-  }, []);
+  }, [notice]);
 
   return (
     <div className="app">
