@@ -60,6 +60,164 @@ function isDonorEligible(lastDonationDate) {
   return !eligibilityDate || eligibilityDate <= new Date().toISOString().slice(0, 10);
 }
 
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem("badhon_user") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function GlobalResponsiveStyles() {
+  return (
+    <style>{`
+      @media (max-width: 900px) {
+        .hero-content {
+          grid-template-columns: 1fr;
+          gap: 32px;
+        }
+
+        .feature-grid,
+        .steps,
+        .dashboard-summary,
+        .dashboard-actions,
+        .dashboard-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .dashboard-header,
+        .cta-content,
+        .nav-container,
+        .footer-content {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .main-nav {
+          flex-wrap: wrap;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .hero-section {
+          padding: 58px 0;
+        }
+
+        .auth-card {
+          padding: 24px 18px;
+        }
+
+        .hero-text h1 {
+          font-size: clamp(2.5rem, 11vw, 3.6rem);
+        }
+
+        .section-heading h2,
+        .cta-content h2,
+        .dashboard-header h1 {
+          font-size: clamp(2rem, 7vw, 2.8rem);
+        }
+
+        .main-nav {
+          width: 100%;
+        }
+
+        .main-nav button {
+          flex: 1 1 calc(50% - 8px);
+        }
+
+        .dashboard-card,
+        .feature-card,
+        .step {
+          padding: 18px;
+        }
+
+        .dashboard-action {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+
+      .role-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #fee2e2;
+        color: #991b1b;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      .admin-panel {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 20px;
+      }
+
+      .admin-stat {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 18px;
+      }
+
+      .admin-stat-label {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #6b7280;
+      }
+
+      .admin-stat-value {
+        font-size: 28px;
+        font-weight: 800;
+        color: #111827;
+      }
+
+      .admin-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 22px;
+      }
+
+      .admin-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+      }
+
+      .admin-table th,
+      .admin-table td {
+        text-align: left;
+        padding: 12px 10px;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 14px;
+      }
+
+      .admin-table th {
+        color: #6b7280;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      @media (max-width: 640px) {
+        .admin-panel {
+          grid-template-columns: 1fr;
+        }
+      }
+    `}</style>
+  );
+}
+
 /* ---------- Shared UI ---------- */
 
 function Logo() {
@@ -80,6 +238,8 @@ function Logo() {
 
 function Header() {
   const token = localStorage.getItem("badhon_token");
+  const user = getStoredUser();
+  const userRole = (user.role || "").toUpperCase();
 
   const handleLogout = () => {
     localStorage.removeItem("badhon_token");
@@ -88,6 +248,7 @@ function Header() {
 
     window.location.href = "/";
   };
+
   const goTo = (path) => {
     window.history.pushState({}, "", path);
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -104,33 +265,24 @@ function Header() {
         <nav className="main-nav">
           <button onClick={() => goTo("/")}>Home</button>
 
-          <button onClick={() => goTo("/requests")}>
-            Find Blood
-          </button>
+          <button onClick={() => goTo("/requests")}>Find Blood</button>
 
           {token ? (
             <>
-              <button onClick={() => goTo("/dashboard")}>
-                Dashboard
-              </button>
+              {userRole === "ADMIN" && (
+                <button onClick={() => goTo("/admin")}>Admin</button>
+              )}
+              <button onClick={() => goTo("/dashboard")}>Dashboard</button>
 
-              <button
-                className="nav-logout"
-                onClick={handleLogout}
-              >
+              <button className="nav-logout" onClick={handleLogout}>
                 Logout
               </button>
             </>
           ) : (
             <>
-              <button onClick={() => goTo("/login")}>
-                Login
-              </button>
+              <button onClick={() => goTo("/login")}>Login</button>
 
-              <button
-                className="nav-register"
-                onClick={() => goTo("/register")}
-              >
+              <button className="nav-register" onClick={() => goTo("/register")}>
                 Register
               </button>
             </>
@@ -195,6 +347,7 @@ function Home() {
 
   return (
     <div className="app">
+      <GlobalResponsiveStyles />
       <Header />
 
       {notice && (
@@ -433,20 +586,18 @@ function AuthPage({ mode }) {
     setLoading(true);
 
     try {
-      const endpoint = isRegister
-        ? "/auth/register"
-        : "/auth/login";
+      const endpoint = isRegister ? "/auth/register" : "/auth/login";
 
       const body = isRegister
         ? {
-          name: form.name.trim(),
-          email: form.email.trim(),
-          password: form.password,
-        }
+            name: form.name.trim(),
+            email: form.email.trim(),
+            password: form.password,
+          }
         : {
-          email: form.email.trim(),
-          password: form.password,
-        };
+            email: form.email.trim(),
+            password: form.password,
+          };
 
       const data = await apiRequest(endpoint, {
         method: "POST",
@@ -454,9 +605,7 @@ function AuthPage({ mode }) {
       });
 
       if (isRegister) {
-        setSuccess(
-          "Registration successful. You can now log in to BADHON."
-        );
+        setSuccess("Registration successful. You can now log in to BADHON.");
 
         setForm({
           name: "",
@@ -481,6 +630,7 @@ function AuthPage({ mode }) {
 
   return (
     <div className="auth-page">
+      <GlobalResponsiveStyles />
       <div className="auth-card">
         <div className="auth-header">
           <Logo />
@@ -496,9 +646,7 @@ function AuthPage({ mode }) {
 
         {error && <Feedback type="error">{error}</Feedback>}
 
-        {success && (
-          <Feedback type="success">{success}</Feedback>
-        )}
+        {success && <Feedback type="success">{success}</Feedback>}
 
         <form onSubmit={handleSubmit} className="auth-form">
           {isRegister && (
@@ -558,24 +706,17 @@ function AuthPage({ mode }) {
           {isRegister ? (
             <>
               Already have an account?{" "}
-              <button onClick={() => navigate("/login")}>
-                Login
-              </button>
+              <button onClick={() => navigate("/login")}>Login</button>
             </>
           ) : (
             <>
               Don't have an account?{" "}
-              <button onClick={() => navigate("/register")}>
-                Register
-              </button>
+              <button onClick={() => navigate("/register")}>Register</button>
             </>
           )}
         </div>
 
-        <button
-          className="back-home"
-          onClick={() => navigate("/")}
-        >
+        <button className="back-home" onClick={() => navigate("/")}>
           ← Back to BADHON
         </button>
       </div>
@@ -586,13 +727,7 @@ function AuthPage({ mode }) {
 /* ---------- Dashboard ---------- */
 
 function Dashboard() {
-  const [user] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("badhon_user") || "{}");
-    } catch {
-      return {};
-    }
-  });
+  const [user] = useState(() => getStoredUser());
 
   const [donorStatus, setDonorStatus] = useState("loading");
   const [donorAvailable, setDonorAvailable] = useState(false);
@@ -602,6 +737,8 @@ function Dashboard() {
     window.history.pushState({}, "", path);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
+
+  const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -648,6 +785,7 @@ function Dashboard() {
 
   return (
     <main className="dashboard-page">
+      <GlobalResponsiveStyles />
       <div className="container dashboard-container">
         <section className="dashboard-header">
           <div>
@@ -659,7 +797,13 @@ function Dashboard() {
             </p>
           </div>
 
-          <div className="dashboard-role">{displayRole || "Role not set"}</div>
+          <div className="dashboard-role">
+            {isAdmin ? (
+              <span className="role-chip">Admin</span>
+            ) : (
+              displayRole || "Role not set"
+            )}
+          </div>
         </section>
 
         <section className="dashboard-summary" aria-label="Account summary">
@@ -728,6 +872,17 @@ function Dashboard() {
               <span className="action-arrow">→</span>
             </button>
 
+            {isAdmin && (
+              <button className="dashboard-action primary" onClick={() => goTo("/admin")}>
+                <span className="action-icon">⚙️</span>
+                <div>
+                  <strong>Admin Panel</strong>
+                  <span>Review user and donor activity from one place.</span>
+                </div>
+                <span className="action-arrow">→</span>
+              </button>
+            )}
+
             <div className="dashboard-action dashboard-action-disabled">
               <span className="action-icon">🩸</span>
               <div>
@@ -735,18 +890,6 @@ function Dashboard() {
                 <span>
                   No blood requests are available yet. Request matching will
                   be added in the next project segment.
-                </span>
-              </div>
-              <span className="action-badge">Next</span>
-            </div>
-
-            <div className="dashboard-action dashboard-action-disabled">
-              <span className="action-icon">📋</span>
-              <div>
-                <strong>My Requests</strong>
-                <span>
-                  No request history yet. Your requests will appear here when
-                  the blood-request workflow is available.
                 </span>
               </div>
               <span className="action-badge">Next</span>
@@ -835,10 +978,7 @@ function Dashboard() {
               </div>
             )}
 
-            <button
-              className="dashboard-button"
-              onClick={() => goTo("/donor")}
-            >
+            <button className="dashboard-button" onClick={() => goTo("/donor")}>
               {donorStatus === "complete"
                 ? "Manage Donor Profile"
                 : "Open Donor Profile"}
@@ -908,13 +1048,187 @@ function Dashboard() {
               Some account information is missing. Add your name and email to complete your account details.
             </Feedback>
           )}
-          <button
-            className="dashboard-button account-edit-button"
-            onClick={() => goTo("/profile")}
-          >
+          <button className="dashboard-button account-edit-button" onClick={() => goTo("/profile")}>
             Manage user and patient information
           </button>
         </section>
+      </div>
+    </main>
+  );
+}
+
+function AdminDashboard() {
+  const [users, setUsers] = useState([]);
+  const [donors, setDonors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadAdminData = async () => {
+      const token = localStorage.getItem("badhon_token");
+      const storedUser = getStoredUser();
+
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      if ((storedUser.role || "").toUpperCase() !== "ADMIN") {
+        sessionStorage.setItem("badhon_notice", "Admin access required.");
+        navigate("/dashboard");
+        return;
+      }
+
+      try {
+        const [userResponse, donorResponse] = await Promise.all([
+          apiRequest("/users", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          apiRequest("/donors", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        setUsers(Array.isArray(userResponse) ? userResponse : []);
+        setDonors(Array.isArray(donorResponse) ? donorResponse : []);
+      } catch (err) {
+        if (err.status === 401 || err.status === 403) {
+          localStorage.removeItem("badhon_token");
+          localStorage.removeItem("badhon_user");
+          sessionStorage.setItem("badhon_notice", "Please log in again.");
+          navigate("/login");
+          return;
+        }
+
+        setError(err.message || "Unable to load admin data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAdminData();
+  }, []);
+
+  if (loading) {
+    return (
+      <main className="dashboard-page">
+        <GlobalResponsiveStyles />
+        <div className="container dashboard-container">
+          <div className="dashboard-state loading-state">
+            <span className="state-spinner" aria-hidden="true" />
+            <div>
+              <strong>Loading admin overview</strong>
+              <p>Please wait a moment.</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="dashboard-page">
+      <GlobalResponsiveStyles />
+      <div className="container dashboard-container">
+        <section className="dashboard-header">
+          <div>
+            <p className="dashboard-eyebrow">Administration</p>
+            <h1>Admin control center</h1>
+            <p className="dashboard-intro">
+              Review key user and donor activity for the BADHON platform.
+            </p>
+          </div>
+          <span className="role-chip">Admin</span>
+        </section>
+
+        {error && <Feedback type="error">{error}</Feedback>}
+
+        <div className="admin-panel">
+          <div className="admin-stat">
+            <span className="admin-stat-label">Total users</span>
+            <div className="admin-stat-value">{users.length}</div>
+          </div>
+
+          <div className="admin-stat">
+            <span className="admin-stat-label">Donor profiles</span>
+            <div className="admin-stat-value">{donors.length}</div>
+          </div>
+
+          <div className="admin-stat">
+            <span className="admin-stat-label">Access level</span>
+            <div className="admin-stat-value">ADMIN</div>
+          </div>
+        </div>
+
+        <div className="dashboard-grid" style={{ marginTop: "24px" }}>
+          <div className="admin-card">
+            <div className="card-heading-row">
+              <div>
+                <p className="card-eyebrow">Users</p>
+                <h2>Registered accounts</h2>
+              </div>
+            </div>
+
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan="3">No users found.</td>
+                  </tr>
+                ) : (
+                  users.slice(0, 6).map((user) => (
+                    <tr key={user._id || user.id || user.email}>
+                      <td>{user.name || "Unknown"}</td>
+                      <td>{user.email || "—"}</td>
+                      <td>{user.role || "USER"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="admin-card">
+            <div className="card-heading-row">
+              <div>
+                <p className="card-eyebrow">Donors</p>
+                <h2>Donor records</h2>
+              </div>
+            </div>
+
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Donor</th>
+                  <th>Blood group</th>
+                  <th>District</th>
+                </tr>
+              </thead>
+              <tbody>
+                {donors.length === 0 ? (
+                  <tr>
+                    <td colSpan="3">No donor profiles found.</td>
+                  </tr>
+                ) : (
+                  donors.slice(0, 6).map((donor) => (
+                    <tr key={donor._id || donor.id || donor.email || donor.phone}>
+                      <td>{donor.name || donor.email || "Unknown"}</td>
+                      <td>{donor.bloodGroup || "—"}</td>
+                      <td>{donor.district || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </main>
   );
@@ -1076,6 +1390,7 @@ function ProfileManagement() {
   if (loading) {
     return (
       <main className="profile-page">
+        <GlobalResponsiveStyles />
         <div className="container profile-container" role="status">
           <span className="state-spinner" aria-hidden="true" />
           <p>Loading your information...</p>
@@ -1087,6 +1402,7 @@ function ProfileManagement() {
   if (loadError) {
     return (
       <main className="profile-page">
+        <GlobalResponsiveStyles />
         <div className="container profile-container">
           <h1>We couldn't load your information</h1>
           <Feedback type="error">{loadError}</Feedback>
@@ -1100,6 +1416,7 @@ function ProfileManagement() {
 
   return (
     <main className="profile-page">
+      <GlobalResponsiveStyles />
       <div className="container profile-container">
         <header className="profile-header">
           <p className="dashboard-eyebrow">Your information</p>
@@ -1378,6 +1695,7 @@ function DonorProfile() {
   if (loading) {
     return (
       <main className="donor-page">
+        <GlobalResponsiveStyles />
         <div className="donor-container donor-loading" role="status">
           <span className="state-spinner" aria-hidden="true" />
           <p>Loading your donor profile...</p>
@@ -1389,6 +1707,7 @@ function DonorProfile() {
   if (loadError) {
     return (
       <main className="donor-page">
+        <GlobalResponsiveStyles />
         <div className="donor-container">
           <div className="donor-header">
             <p className="dashboard-eyebrow">Donor Profile</p>
@@ -1412,14 +1731,13 @@ function DonorProfile() {
 
   return (
     <main className="donor-page">
+      <GlobalResponsiveStyles />
       <div className="donor-container">
         <div className="donor-header">
           <p className="dashboard-eyebrow">Donor Profile</p>
 
           <h1>
-            {profileExists
-              ? "Manage your donor profile"
-              : "Become a BADHON donor"}
+            {profileExists ? "Manage your donor profile" : "Become a BADHON donor"}
           </h1>
 
           <p>
@@ -1468,13 +1786,9 @@ function DonorProfile() {
           </div>
         </section>
 
-        {message && (
-          <Feedback type="success">{message}</Feedback>
-        )}
+        {message && <Feedback type="success">{message}</Feedback>}
 
-        {error && (
-          <Feedback type="error">{error}</Feedback>
-        )}
+        {error && <Feedback type="error">{error}</Feedback>}
 
         {!profileExists && !error && (
           <div className="donor-empty-state">
@@ -1483,18 +1797,13 @@ function DonorProfile() {
           </div>
         )}
 
-        <form
-          className="donor-form"
-          onSubmit={handleSubmit}
-        >
+        <form className="donor-form" onSubmit={handleSubmit}>
           <section className="donor-form-section">
             <h2>Donor Information</h2>
 
             <div className="form-grid">
               <div className="form-group">
-                <label htmlFor="bloodGroup">
-                  Blood Group
-                </label>
+                <label htmlFor="bloodGroup">Blood Group</label>
 
                 <select
                   id="bloodGroup"
@@ -1503,9 +1812,7 @@ function DonorProfile() {
                   onChange={handleChange}
                   required
                 >
-                  <option value="">
-                    Select blood group
-                  </option>
+                  <option value="">Select blood group</option>
                   <option value="A+">A+</option>
                   <option value="A-">A-</option>
                   <option value="B+">B+</option>
@@ -1518,9 +1825,7 @@ function DonorProfile() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="phone">
-                  Phone Number
-                </label>
+                <label htmlFor="phone">Phone Number</label>
 
                 <input
                   id="phone"
@@ -1537,9 +1842,7 @@ function DonorProfile() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="district">
-                  Location / District
-                </label>
+                <label htmlFor="district">Location / District</label>
 
                 <input
                   id="district"
@@ -1553,9 +1856,7 @@ function DonorProfile() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="lastDonationDate">
-                  Last Donation Date
-                </label>
+                <label htmlFor="lastDonationDate">Last Donation Date</label>
 
                 <input
                   id="lastDonationDate"
@@ -1612,11 +1913,7 @@ function DonorProfile() {
               Cancel
             </button>
 
-            <button
-              type="submit"
-              className="dashboard-button"
-              disabled={saving}
-            >
+            <button type="submit" className="dashboard-button" disabled={saving}>
               {saving
                 ? "Saving..."
                 : profileExists
@@ -1648,6 +1945,8 @@ function App() {
   }, []);
 
   const token = localStorage.getItem("badhon_token");
+  const storedUser = getStoredUser();
+  const isAdmin = (storedUser.role || "").toUpperCase() === "ADMIN";
 
   if (path === "/dashboard" && !token) {
     window.history.replaceState({}, "", "/login");
@@ -1664,6 +1963,20 @@ function App() {
 
   if (path === "/dashboard") {
     return <Dashboard />;
+  }
+
+  if (path === "/admin") {
+    if (!token) {
+      window.history.replaceState({}, "", "/login");
+      return <AuthPage mode="login" />;
+    }
+
+    if (!isAdmin) {
+      window.history.replaceState({}, "", "/dashboard");
+      return <Dashboard />;
+    }
+
+    return <AdminDashboard />;
   }
 
   if (path === "/profile") {
