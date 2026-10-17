@@ -36,4 +36,27 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+const optionalAuth = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return next();
+    }
+
+    const parts = authHeader.split(" ");
+
+    if (parts.length === 2 && parts[0] === "Bearer") {
+      const decoded = jwt.verify(parts[1], getJwtSecret());
+      req.user = decoded;
+    }
+  } catch {
+    // Ignore invalid token on optional auth
+  }
+
+  next();
+};
+
+authenticateToken.optional = optionalAuth;
+
 module.exports = authenticateToken;

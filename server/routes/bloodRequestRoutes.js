@@ -1,36 +1,27 @@
 const express = require("express");
 
 const authenticateToken = require("../middleware/authMiddleware");
-const authorizeRoles = require("../middleware/roleMiddleware");
 
 const {
   createBloodRequest,
   getBloodRequests,
+  getMyBloodRequests,
   getBloodRequestById,
   updateBloodRequest,
+  updateBloodRequestStatus,
+  respondToBloodRequest,
   deleteBloodRequest,
 } = require("../controllers/bloodRequestController");
 
 const router = express.Router();
 
 router.post("/", authenticateToken, createBloodRequest);
-
-router.get("/", authenticateToken, getBloodRequests);
-
-router.get("/:id", authenticateToken, getBloodRequestById);
-
-router.put(
-  "/:id",
-  authenticateToken,
-  authorizeRoles("ADMIN"),
-  updateBloodRequest
-);
-
-router.delete(
-  "/:id",
-  authenticateToken,
-  authorizeRoles("ADMIN"),
-  deleteBloodRequest
-);
+router.get("/", authenticateToken.optional, getBloodRequests);
+router.get("/my", authenticateToken, getMyBloodRequests);
+router.get("/:id", authenticateToken.optional, getBloodRequestById);
+router.put("/:id", authenticateToken, updateBloodRequest);
+router.patch("/:id/status", authenticateToken, updateBloodRequestStatus);
+router.post("/:id/respond", authenticateToken, respondToBloodRequest);
+router.delete("/:id", authenticateToken, deleteBloodRequest);
 
 module.exports = router;

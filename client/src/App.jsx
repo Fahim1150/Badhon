@@ -589,6 +589,8 @@ function Dashboard() {
   const [donorStatus, setDonorStatus] = useState("loading");
   const [donorAvailable, setDonorAvailable] = useState(false);
   const [donorError, setDonorError] = useState("");
+  const [requestsSummary, setRequestsSummary] = useState({ total: 0, active: 0, pending: 0, matched: 0, myRequests: 0 });
+  const [recentRequests, setRecentRequests] = useState([]);
 
   const goTo = (path) => {
     window.history.pushState({}, "", path);
@@ -617,23 +619,44 @@ function Dashboard() {
       } catch (err) {
         if (err.status === 404) {
           setDonorStatus("incomplete");
-          return;
-        }
-
-        if (err.status === 401 || err.status === 403) {
+        } else if (err.status === 401 || err.status === 403) {
           localStorage.removeItem("badhon_token");
           localStorage.removeItem("badhon_user");
           goTo("/login");
           return;
+        } else {
+          setDonorStatus("error");
+          setDonorError(err.message || "Unable to load donor status");
         }
+      }
 
-        setDonorStatus("error");
-        setDonorError(err.message || "Unable to load donor status");
+      try {
+        const reqData = await apiRequest("/blood-requests", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (Array.isArray(reqData)) {
+          const active = reqData.filter((r) => r.status === "Pending" || r.status === "Matched");
+          const mine = reqData.filter((r) => {
+            const reqUser = r.requester?._id || r.requester;
+            const myId = user.id || user._id;
+            return reqUser && myId && reqUser.toString() === myId.toString();
+          });
+          setRequestsSummary({
+            total: reqData.length,
+            active: active.length,
+            pending: reqData.filter((r) => r.status === "Pending").length,
+            matched: reqData.filter((r) => r.status === "Matched").length,
+            myRequests: mine.length,
+          });
+          setRecentRequests(active.slice(0, 4));
+        }
+      } catch {
+        // supplementary metrics
       }
     };
 
     loadDashboardData();
-  }, []);
+  }, [user._id, user.id]);
 
   const displayName = user.name?.trim() || "";
   const displayEmail = user.email?.trim() || "";
@@ -689,11 +712,21 @@ function Dashboard() {
               </div>
             </div>
 
-            <div className="summary-card">
+            <div className="summary-card" onClick={() => goTo("/requests")} style={{ cursor: "pointer" }}>
               <span className="summary-icon">🩸</span>
               <div>
                 <span className="summary-label">Blood requests</span>
-                <strong className="summary-muted">No requests yet</strong>
+                {requestsSummary.active > 0 ? (
+                  <strong className="summary-success">
+                    {requestsSummary.active} Active Request{requestsSummary.active !== 1 ? "s" : ""}
+                  </strong>
+                ) : requestsSummary.total > 0 ? (
+                  <strong className="summary-muted">
+                    {requestsSummary.total} Total Requests
+                  </strong>
+                ) : (
+                  <strong className="summary-muted">No active requests</strong>
+                )}
               </div>
             </div>
           </section>
@@ -716,8 +749,26 @@ function Dashboard() {
                 <span className="action-arrow">→</span>
               </button>
 
+              <button className="dashboard-action primary" onClick={() => goTo("/requests")}>
+                <span className="action-icon">🩸</span>
+                <div>
+                  <strong>Find Blood Requests</strong>
+                  <span>Browse emergency requests, accept to donate, or manage patient requests.</span>
+                </div>
+                <span className="action-arrow">→</span>
+              </button>
+
+              <button className="dashboard-action" onClick={() => goTo("/requests?create=true")}>
+                <span className="action-icon">➕</span>
+                <div>
+                  <strong>Post Blood Request</strong>
+                  <span>Need blood for a patient? Create an emergency request for donors.</span>
+                </div>
+                <span className="action-arrow">→</span>
+              </button>
+
               {isAdmin && (
-                <button className="dashboard-action primary" onClick={() => goTo("/admin")}>
+                <button className="dashboard-action" onClick={() => goTo("/admin")}>
                   <span className="action-icon">⚙️</span>
                   <div>
                     <strong>Admin Panel</strong>
@@ -726,15 +777,6 @@ function Dashboard() {
                   <span className="action-arrow">→</span>
                 </button>
               )}
-
-              <div className="dashboard-action dashboard-action-disabled">
-                <span className="action-icon">🩸</span>
-                <div>
-                  <strong>Find Blood</strong>
-                  <span>No blood requests are available yet. Request matching will be added in the next project segment.</span>
-                </div>
-                <span className="action-badge">Next</span>
-              </div>
             </div>
           </section>
 
@@ -824,16 +866,68 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="next-step next-step-muted">
+                <div className="next-step" onClick={() => goTo("/requests")} style={{ cursor: "pointer" }}>
                   <span className="next-step-number">03</span>
                   <div>
-                    <strong>Blood-request workflow</strong>
-                    <p>This will be added in the next project segment.</p>
+                    <strong>Blood-request management</strong>
+                    <p>Create and monitor blood requests, or respond to save a life.</p>
                   </div>
                 </div>
               </div>
             </div>
           </section>
+
+          {recentRequests.length > 0 && (
+            <section className="dashboard-section" style={{ marginTop: "32px" }}>
+              <div className="dashboard-section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                <div>
+                  <p className="dashboard-eyebrow">Emergency calls</p>
+                  <h2>Active blood requests</h2>
+                </div>
+                <button className="btn btn-outline" onClick={() => goTo("/requests")}>
+                  View all blood requests →
+                </button>
+              </div>
+
+              <div className="requests-grid">
+                {recentRequests.map((req) => (
+                  <div key={req._id} className={`request-card ${req.urgency === "Emergency" ? "emergency-card" : ""}`}>
+                    <div className="request-card-top">
+                      <span className="blood-badge">{req.bloodGroup}</span>
+                      <div className="badge-group">
+                        <span className={`urgency-badge urgency-${req.urgency}`}>{req.urgency}</span>
+                        <span className={`status-tag status-${req.status}`}>{req.status}</span>
+                      </div>
+                    </div>
+
+                    <div className="request-card-info">
+                      <h3>
+                        {req.patientName} <span className="units-tag">{req.requiredUnits} Unit{req.requiredUnits > 1 ? "s" : ""}</span>
+                      </h3>
+                      <div className="request-card-details">
+                        <div className="request-detail-row">
+                          <span className="request-detail-icon">📍</span>
+                          <span>{req.hospital ? `${req.hospital}, ` : ""}{req.location}</span>
+                        </div>
+                        <div className="request-detail-row">
+                          <span className="request-detail-icon">📞</span>
+                          <a href={`tel:${req.contactNumber}`} style={{ color: "inherit", textDecoration: "none" }}>
+                            {req.contactNumber}
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="request-card-actions">
+                      <button className="btn-sm btn-secondary" onClick={() => goTo("/requests")}>
+                        View in Blood Requests →
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="dashboard-card account-card">
             <div className="card-heading-row">
@@ -1682,6 +1776,989 @@ function DonorProfile() {
   );
 }
 
+function BloodRequestsPage() {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [bloodGroupFilter, setBloodGroupFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [urgencyFilter, setUrgencyFilter] = useState("");
+  const [myOnly, setMyOnly] = useState(() => window.location.search.includes("mine=true"));
+
+  const [donorProfile, setDonorProfile] = useState(null);
+  const [user] = useState(() => getStoredUser());
+  const token = localStorage.getItem("badhon_token");
+  const isAdmin = (user.role || "").toUpperCase() === "ADMIN";
+  const userId = user.id || user._id;
+
+  // Create / Edit modal state
+  const [modalOpen, setModalOpen] = useState(() => window.location.search.includes("create=true"));
+  const [editingRequest, setEditingRequest] = useState(null);
+  const [form, setForm] = useState({
+    patientName: "",
+    bloodGroup: "",
+    location: "",
+    hospital: "",
+    contactNumber: "",
+    requiredUnits: 1,
+    urgency: "Medium",
+    neededBy: "",
+    notes: "",
+  });
+  const [formError, setFormError] = useState("");
+  const [formSubmitting, setFormSubmitting] = useState(false);
+
+  // Response modal state
+  const [respondingTo, setRespondingTo] = useState(null);
+  const [responseStatus, setResponseStatus] = useState("Accepted");
+  const [responseMessage, setResponseMessage] = useState("");
+  const [submittingResponse, setSubmittingResponse] = useState(false);
+  const [responseError, setResponseError] = useState("");
+
+  // Details modal
+  const [detailsRequest, setDetailsRequest] = useState(null);
+
+  // Notification feedback
+  const [feedback, setFeedback] = useState(null);
+
+  const goTo = (path) => {
+    window.history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const executeFetch = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (bloodGroupFilter) params.append("bloodGroup", bloodGroupFilter);
+        if (statusFilter) params.append("status", statusFilter);
+        if (urgencyFilter) params.append("urgency", urgencyFilter);
+        if (search.trim()) params.append("search", search.trim());
+        if (myOnly) params.append("myRequests", "true");
+
+        const queryStr = params.toString() ? `?${params.toString()}` : "";
+        const data = await apiRequest(`/blood-requests${queryStr}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (!ignore) {
+          setRequests(Array.isArray(data) ? data : []);
+          setError("");
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "Failed to load blood requests");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    const timer = setTimeout(executeFetch, search ? 300 : 0);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [bloodGroupFilter, statusFilter, urgencyFilter, myOnly, search, token, reloadTrigger]);
+
+  useEffect(() => {
+    if (!token) return;
+    const fetchDonor = async () => {
+      try {
+        const data = await apiRequest("/donors/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setDonorProfile(data);
+      } catch {
+        // Not a donor yet
+      }
+    };
+    fetchDonor();
+  }, [token]);
+
+  const openCreateModal = () => {
+    if (!token) {
+      sessionStorage.setItem("badhon_notice", "Please login to post a blood request.");
+      goTo("/login");
+      return;
+    }
+    setEditingRequest(null);
+    setForm({
+      patientName: "",
+      bloodGroup: "",
+      location: "",
+      hospital: "",
+      contactNumber: "",
+      requiredUnits: 1,
+      urgency: "Medium",
+      neededBy: "",
+      notes: "",
+    });
+    setFormError("");
+    setModalOpen(true);
+  };
+
+  const openEditModal = (req) => {
+    setEditingRequest(req);
+    setForm({
+      patientName: req.patientName || "",
+      bloodGroup: req.bloodGroup || "",
+      location: req.location || "",
+      hospital: req.hospital || "",
+      contactNumber: req.contactNumber || "",
+      requiredUnits: req.requiredUnits || 1,
+      urgency: req.urgency || "Medium",
+      neededBy: req.neededBy ? req.neededBy.slice(0, 10) : "",
+      notes: req.notes || "",
+    });
+    setFormError("");
+    setModalOpen(true);
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    setFormError("");
+
+    if (!form.patientName.trim() || form.patientName.trim().length < 2) {
+      setFormError("Please enter patient name (minimum 2 characters).");
+      return;
+    }
+
+    if (!bloodGroups.includes(form.bloodGroup)) {
+      setFormError("Please select a valid blood group.");
+      return;
+    }
+
+    if (!form.location.trim() || form.location.trim().length < 2) {
+      setFormError("Please enter location or district (minimum 2 characters).");
+      return;
+    }
+
+    if (!/^01\d{9}$/.test(form.contactNumber.trim())) {
+      setFormError("Please enter a valid 11-digit mobile number (01XXXXXXXXX).");
+      return;
+    }
+
+    if (!form.requiredUnits || Number(form.requiredUnits) < 1) {
+      setFormError("Required units must be at least 1.");
+      return;
+    }
+
+    setFormSubmitting(true);
+
+    try {
+      const payload = {
+        patientName: form.patientName.trim(),
+        bloodGroup: form.bloodGroup,
+        location: form.location.trim(),
+        hospital: form.hospital.trim(),
+        contactNumber: form.contactNumber.trim(),
+        requiredUnits: Math.floor(Number(form.requiredUnits)),
+        urgency: form.urgency,
+        neededBy: form.neededBy || null,
+        notes: form.notes.trim(),
+      };
+
+      if (editingRequest) {
+        const updated = await apiRequest(`/blood-requests/${editingRequest._id}`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        setRequests((prev) =>
+          prev.map((r) => (r._id === updated._id ? updated : r))
+        );
+        setFeedback({ type: "success", text: "Blood request updated successfully." });
+      } else {
+        const created = await apiRequest("/blood-requests", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        setRequests((prev) => [created, ...prev]);
+        setFeedback({ type: "success", text: "Blood request created successfully." });
+      }
+
+      setModalOpen(false);
+      setReloadTrigger((prev) => prev + 1);
+    } catch (err) {
+      setFormError(err.message || "Failed to save blood request.");
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const handleStatusChange = async (reqId, newStatus) => {
+    try {
+      const updated = await apiRequest(`/blood-requests/${reqId}/status`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setRequests((prev) =>
+        prev.map((r) => (r._id === updated._id ? updated : r))
+      );
+      if (detailsRequest && detailsRequest._id === updated._id) {
+        setDetailsRequest(updated);
+      }
+      setReloadTrigger((prev) => prev + 1);
+      setFeedback({ type: "success", text: `Request status marked as ${newStatus}.` });
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message || "Failed to update status." });
+    }
+  };
+
+  const handleDelete = async (reqId) => {
+    if (!window.confirm("Are you sure you want to delete this blood request?")) return;
+
+    try {
+      await apiRequest(`/blood-requests/${reqId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRequests((prev) => prev.filter((r) => r._id !== reqId));
+      if (detailsRequest && detailsRequest._id === reqId) {
+        setDetailsRequest(null);
+      }
+      setReloadTrigger((prev) => prev + 1);
+      setFeedback({ type: "success", text: "Blood request deleted." });
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message || "Failed to delete request." });
+    }
+  };
+
+  const openResponseModal = (req, status) => {
+    if (!token) {
+      sessionStorage.setItem("badhon_notice", "Please login to respond to a blood request.");
+      goTo("/login");
+      return;
+    }
+    if (!donorProfile) {
+      sessionStorage.setItem("badhon_notice", "Please complete your donor profile to respond to blood requests.");
+      goTo("/donor");
+      return;
+    }
+    setRespondingTo(req);
+    setResponseStatus(status);
+    setResponseMessage("");
+    setResponseError("");
+  };
+
+  const submitResponse = async (e) => {
+    e.preventDefault();
+    if (!respondingTo) return;
+    setSubmittingResponse(true);
+    setResponseError("");
+
+    try {
+      const result = await apiRequest(`/blood-requests/${respondingTo._id}/respond`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          status: responseStatus,
+          message: responseMessage.trim(),
+        }),
+      });
+
+      const updated = result.request || result;
+      setRequests((prev) =>
+        prev.map((r) => (r._id === updated._id ? updated : r))
+      );
+      if (detailsRequest && detailsRequest._id === updated._id) {
+        setDetailsRequest(updated);
+      }
+      setRespondingTo(null);
+      setReloadTrigger((prev) => prev + 1);
+      setFeedback({
+        type: "success",
+        text: `You have ${responseStatus.toLowerCase()} the request for ${updated.patientName}.`,
+      });
+    } catch (err) {
+      setResponseError(err.message || "Failed to submit response.");
+    } finally {
+      setSubmittingResponse(false);
+    }
+  };
+
+  const isOwner = (req) => {
+    if (!userId || !req.requester) return false;
+    const reqUserId = req.requester._id || req.requester;
+    return reqUserId.toString() === userId.toString();
+  };
+
+  const getDonorResponse = (req) => {
+    if (!userId || !Array.isArray(req.responses)) return null;
+    return req.responses.find((r) => r.user && r.user.toString() === userId.toString());
+  };
+
+  return (
+    <>
+      <Header />
+      <main className="requests-page">
+        <GlobalResponsiveStyles />
+        <div className="container">
+          <div className="requests-header-row">
+            <div>
+              <p className="dashboard-eyebrow">Emergency Community Network</p>
+              <h1>Blood Requests</h1>
+              <p>
+                Connect patients in need with active blood donors across Bangladesh. Browse active requests or post an urgent need.
+              </p>
+            </div>
+            <button className="btn btn-primary btn-large" onClick={openCreateModal}>
+              + Post Blood Request
+            </button>
+          </div>
+
+          {feedback && (
+            <Feedback type={feedback.type}>{feedback.text}</Feedback>
+          )}
+
+          <div className="requests-toolbar">
+            <input
+              type="text"
+              className="requests-search-input"
+              placeholder="🔍 Search patient, hospital, location..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            <select
+              className="requests-select"
+              value={bloodGroupFilter}
+              onChange={(e) => setBloodGroupFilter(e.target.value)}
+              aria-label="Filter by blood group"
+            >
+              <option value="">All Blood Groups</option>
+              {bloodGroups.map((bg) => (
+                <option key={bg} value={bg}>{bg}</option>
+              ))}
+            </select>
+
+            <select
+              className="requests-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by status"
+            >
+              <option value="">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Matched">Matched</option>
+              <option value="Fulfilled">Fulfilled</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="Expired">Expired</option>
+            </select>
+
+            <select
+              className="requests-select"
+              value={urgencyFilter}
+              onChange={(e) => setUrgencyFilter(e.target.value)}
+              aria-label="Filter by urgency"
+            >
+              <option value="">All Urgencies</option>
+              <option value="Emergency">Emergency</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+
+            {token && (
+              <button
+                type="button"
+                className={`requests-filter-btn ${myOnly ? "active" : ""}`}
+                onClick={() => setMyOnly(!myOnly)}
+              >
+                👤 My Requests
+              </button>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="dashboard-state loading-state">
+              <span className="state-spinner" aria-hidden="true" />
+              <div>
+                <strong>Loading blood requests...</strong>
+                <p>Please wait a moment while we retrieve the latest requests.</p>
+              </div>
+            </div>
+          ) : error ? (
+            <Feedback type="error">{error}</Feedback>
+          ) : requests.length === 0 ? (
+            <div className="donor-empty-state">
+              <strong>No blood requests found.</strong>
+              <p>
+                {search || bloodGroupFilter || statusFilter || urgencyFilter || myOnly
+                  ? "Try resetting your search filters to see more requests."
+                  : "There are currently no active blood requests. If you need blood for a patient, create a request above."}
+              </p>
+            </div>
+          ) : (
+            <div className="requests-grid">
+              {requests.map((req) => {
+                const owner = isOwner(req);
+                const donorResp = getDonorResponse(req);
+                const isMatched = req.status === "Matched";
+                const isEmergency = req.urgency === "Emergency";
+                const isClosed = ["Fulfilled", "Cancelled", "Expired"].includes(req.status);
+
+                return (
+                  <div
+                    key={req._id}
+                    className={`request-card ${isEmergency ? "emergency-card" : ""}`}
+                  >
+                    <div className="request-card-top">
+                      <span className="blood-badge">{req.bloodGroup}</span>
+                      <div className="badge-group">
+                        <span className={`urgency-badge urgency-${req.urgency}`}>{req.urgency}</span>
+                        <span className={`status-tag status-${req.status}`}>{req.status}</span>
+                      </div>
+                    </div>
+
+                    <div className="request-card-info">
+                      <h3>
+                        {req.patientName}
+                        <span className="units-tag">
+                          {req.requiredUnits} Unit{req.requiredUnits > 1 ? "s" : ""}
+                        </span>
+                      </h3>
+
+                      <div className="request-card-details">
+                        <div className="request-detail-row">
+                          <span className="request-detail-icon">📍</span>
+                          <span>{req.hospital ? `${req.hospital}, ` : ""}{req.location}</span>
+                        </div>
+                        <div className="request-detail-row">
+                          <span className="request-detail-icon">📞</span>
+                          <a href={`tel:${req.contactNumber}`} style={{ color: "inherit", textDecoration: "none" }}>
+                            {req.contactNumber}
+                          </a>
+                        </div>
+                        {req.neededBy && (
+                          <div className="request-detail-row">
+                            <span className="request-detail-icon">⏰</span>
+                            <span>
+                              Needed by: {new Date(req.neededBy).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </span>
+                          </div>
+                        )}
+                        {req.requester?.name && (
+                          <div className="request-detail-row" style={{ fontSize: "12px", color: "#6b7280" }}>
+                            <span className="request-detail-icon">👤</span>
+                            <span>Posted by {req.requester.name}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {isMatched && req.matchedDonor && (
+                      <div className="request-matched-banner">
+                        <span>🤝</span>
+                        <div>
+                          <strong>Matched Donor: {req.matchedDonor.name}</strong>
+                          <div>Phone: {req.matchedDonor.phone} ({req.matchedDonor.bloodGroup})</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {donorResp && (
+                      <div className={`request-donor-response-banner ${donorResp.status === "Accepted" ? "accepted" : "declined"}`}>
+                        {donorResp.status === "Accepted"
+                          ? "✓ You accepted to donate for this request."
+                          : "✕ You declined this request."}
+                      </div>
+                    )}
+
+                    {req.notes && (
+                      <div className="request-notes">
+                        "{req.notes}"
+                      </div>
+                    )}
+
+                    <div className="request-card-actions">
+                      {/* Owner / Admin Controls */}
+                      {(owner || isAdmin) && !isClosed && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-sm btn-success"
+                            onClick={() => handleStatusChange(req._id, "Fulfilled")}
+                          >
+                            ✓ Mark Fulfilled
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-sm btn-danger-outline"
+                            onClick={() => handleStatusChange(req._id, "Cancelled")}
+                          >
+                            ✕ Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-sm btn-secondary"
+                            onClick={() => openEditModal(req)}
+                          >
+                            ✏️ Edit
+                          </button>
+                        </>
+                      )}
+
+                      {(owner || isAdmin) && isClosed && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-sm btn-secondary"
+                            onClick={() => handleStatusChange(req._id, "Pending")}
+                          >
+                            ↺ Reopen
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-sm btn-danger-outline"
+                            onClick={() => handleDelete(req._id)}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </>
+                      )}
+
+                      {/* Donor Controls */}
+                      {!owner && !isClosed && (
+                        <>
+                          {token && donorProfile ? (
+                            <>
+                              {donorResp?.status !== "Accepted" && (
+                                <button
+                                  type="button"
+                                  className="btn-sm btn-success"
+                                  onClick={() => openResponseModal(req, "Accepted")}
+                                >
+                                  ❤️ Accept to Donate
+                                </button>
+                              )}
+                              {donorResp?.status !== "Declined" && (
+                                <button
+                                  type="button"
+                                  className="btn-sm btn-secondary"
+                                  onClick={() => openResponseModal(req, "Declined")}
+                                >
+                                  Decline
+                                </button>
+                              )}
+                            </>
+                          ) : token ? (
+                            <button
+                              type="button"
+                              className="btn-sm btn-secondary"
+                              onClick={() => goTo("/donor")}
+                            >
+                              Become a Donor to Accept
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-sm btn-secondary"
+                              onClick={() => goTo("/login")}
+                            >
+                              Login to Respond
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn-sm btn-secondary"
+                        style={{ marginLeft: "auto" }}
+                        onClick={() => setDetailsRequest(req)}
+                      >
+                        Details {req.responses?.length ? `(${req.responses.length})` : ""} →
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Modal: Create / Edit Blood Request */}
+        {modalOpen && (
+          <div className="modal-overlay" onClick={() => setModalOpen(false)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{editingRequest ? "Edit Blood Request" : "Post a Blood Request"}</h2>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={() => setModalOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleFormSubmit}>
+                <div className="modal-body">
+                  {formError && <Feedback type="error">{formError}</Feedback>}
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label htmlFor="patientName">Patient Full Name *</label>
+                      <input
+                        id="patientName"
+                        name="patientName"
+                        type="text"
+                        value={form.patientName}
+                        onChange={handleFormChange}
+                        placeholder="e.g. Karim Ahmed"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="bloodGroup">Blood Group Needed *</label>
+                      <select
+                        id="bloodGroup"
+                        name="bloodGroup"
+                        value={form.bloodGroup}
+                        onChange={handleFormChange}
+                        required
+                      >
+                        <option value="">Select blood group</option>
+                        {bloodGroups.map((bg) => (
+                          <option key={bg} value={bg}>{bg}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="requiredUnits">Required Units (Bags) *</label>
+                      <input
+                        id="requiredUnits"
+                        name="requiredUnits"
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={form.requiredUnits}
+                        onChange={handleFormChange}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="urgency">Urgency Level *</label>
+                      <select
+                        id="urgency"
+                        name="urgency"
+                        value={form.urgency}
+                        onChange={handleFormChange}
+                        required
+                      >
+                        <option value="Emergency">Emergency (Immediate)</option>
+                        <option value="High">High (Within 6 hours)</option>
+                        <option value="Medium">Medium (Within 24 hours)</option>
+                        <option value="Low">Low (Scheduled in advance)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="hospital">Hospital / Clinic Name</label>
+                      <input
+                        id="hospital"
+                        name="hospital"
+                        type="text"
+                        value={form.hospital}
+                        onChange={handleFormChange}
+                        placeholder="e.g. Dhaka Medical College Hospital"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="location">District / Area *</label>
+                      <input
+                        id="location"
+                        name="location"
+                        type="text"
+                        value={form.location}
+                        onChange={handleFormChange}
+                        placeholder="e.g. Mirpur, Dhaka"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="contactNumber">Contact Phone Number *</label>
+                      <input
+                        id="contactNumber"
+                        name="contactNumber"
+                        type="tel"
+                        value={form.contactNumber}
+                        onChange={handleFormChange}
+                        placeholder="01XXXXXXXXX"
+                        maxLength={11}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="neededBy">Needed By Date</label>
+                      <input
+                        id="neededBy"
+                        name="neededBy"
+                        type="date"
+                        value={form.neededBy}
+                        onChange={handleFormChange}
+                        min={new Date().toISOString().slice(0, 10)}
+                      />
+                    </div>
+
+                    <div className="form-group profile-field-wide">
+                      <label htmlFor="notes">Medical Condition / Special Instructions</label>
+                      <textarea
+                        id="notes"
+                        name="notes"
+                        rows="3"
+                        value={form.notes}
+                        onChange={handleFormChange}
+                        placeholder="Provide details about the surgery, operation room, or patient condition..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setModalOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={formSubmitting}
+                  >
+                    {formSubmitting
+                      ? "Saving..."
+                      : editingRequest
+                      ? "Update Request"
+                      : "Publish Blood Request"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Donor Accept / Decline Response */}
+        {respondingTo && (
+          <div className="modal-overlay" onClick={() => setRespondingTo(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{responseStatus === "Accepted" ? "Accept Blood Request" : "Decline Blood Request"}</h2>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={() => setRespondingTo(null)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={submitResponse}>
+                <div className="modal-body">
+                  {responseError && <Feedback type="error">{responseError}</Feedback>}
+
+                  <p style={{ margin: "0 0 16px", color: "#374151" }}>
+                    {responseStatus === "Accepted"
+                      ? `You are confirming that you are willing to donate ${respondingTo.bloodGroup} blood for patient ${respondingTo.patientName} at ${respondingTo.hospital || respondingTo.location}.`
+                      : `You are declining this blood request for patient ${respondingTo.patientName}.`}
+                  </p>
+
+                  <div className="form-group">
+                    <label htmlFor="responseMessage">Optional Note to Requester</label>
+                    <textarea
+                      id="responseMessage"
+                      rows="3"
+                      value={responseMessage}
+                      onChange={(e) => setResponseMessage(e.target.value)}
+                      placeholder={
+                        responseStatus === "Accepted"
+                          ? "e.g. I can arrive at the hospital by 11:00 AM. Please call me."
+                          : "e.g. Unable to donate this week due to travel."
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setRespondingTo(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={`btn ${responseStatus === "Accepted" ? "btn-success" : "btn-secondary"}`}
+                    disabled={submittingResponse}
+                  >
+                    {submittingResponse
+                      ? "Submitting..."
+                      : responseStatus === "Accepted"
+                      ? "Confirm Accept"
+                      : "Confirm Decline"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Request Details & Donor Responses */}
+        {detailsRequest && (
+          <div className="modal-overlay" onClick={() => setDetailsRequest(null)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Blood Request Details</h2>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={() => setDetailsRequest(null)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div style={{ display: "flex", gap: "14px", alignItems: "center", marginBottom: "20px" }}>
+                  <span className="blood-badge">{detailsRequest.bloodGroup}</span>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "22px" }}>{detailsRequest.patientName}</h3>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                      <span className={`urgency-badge urgency-${detailsRequest.urgency}`}>{detailsRequest.urgency}</span>
+                      <span className={`status-tag status-${detailsRequest.status}`}>{detailsRequest.status}</span>
+                      <span className="units-tag">{detailsRequest.requiredUnits} Unit{detailsRequest.requiredUnits > 1 ? "s" : ""}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="account-info" style={{ marginBottom: "20px" }}>
+                  <div>
+                    <span>Hospital</span>
+                    <strong>{detailsRequest.hospital || "Not specified"}</strong>
+                  </div>
+                  <div>
+                    <span>Location</span>
+                    <strong>{detailsRequest.location}</strong>
+                  </div>
+                  <div>
+                    <span>Contact Number</span>
+                    <strong>
+                      <a href={`tel:${detailsRequest.contactNumber}`} style={{ color: "inherit" }}>
+                        {detailsRequest.contactNumber}
+                      </a>
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Needed By</span>
+                    <strong>
+                      {detailsRequest.neededBy
+                        ? new Date(detailsRequest.neededBy).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "As soon as possible"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Posted By</span>
+                    <strong>{detailsRequest.requester?.name || "Community Member"}</strong>
+                  </div>
+                  <div>
+                    <span>Date Posted</span>
+                    <strong>{new Date(detailsRequest.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</strong>
+                  </div>
+                </div>
+
+                {detailsRequest.notes && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <span className="summary-label">Notes & Instructions</span>
+                    <p style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px", margin: "6px 0 0" }}>
+                      {detailsRequest.notes}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <span className="summary-label">
+                    Donor Responses ({detailsRequest.responses?.length || 0})
+                  </span>
+
+                  {!detailsRequest.responses || detailsRequest.responses.length === 0 ? (
+                    <p style={{ color: "#6b7280", fontSize: "14px", marginTop: "6px" }}>
+                      No donors have responded to this request yet.
+                    </p>
+                  ) : (
+                    <div className="responses-list">
+                      {detailsRequest.responses.map((resp, idx) => (
+                        <div
+                          key={resp._id || idx}
+                          className={`response-card ${resp.status === "Accepted" ? "accepted" : "declined"}`}
+                        >
+                          <div className="response-card-header">
+                            <strong>{resp.donorName} ({resp.donorBloodGroup})</strong>
+                            <span className={`status-tag status-${resp.status === "Accepted" ? "Fulfilled" : "Cancelled"}`}>
+                              {resp.status}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "13px", color: "#4b5563" }}>
+                            Phone: <a href={`tel:${resp.donorPhone}`}>{resp.donorPhone}</a>
+                          </div>
+                          {resp.message && (
+                            <div style={{ fontSize: "13px", marginTop: "6px", fontStyle: "italic", color: "#374151" }}>
+                              "{resp.message}"
+                            </div>
+                          )}
+                          <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "6px" }}>
+                            Responded on {new Date(resp.respondedAt || resp.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setDetailsRequest(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+      <Footer />
+    </>
+  );
+}
+
 function App() {
   const [path, setPath] = useState(window.location.pathname);
 
@@ -1703,6 +2780,7 @@ function App() {
   if (path === "/register") return <AuthPage mode="register" />;
   if (path === "/login") return <AuthPage mode="login" />;
   if (path === "/dashboard") return <Dashboard />;
+  if (path === "/requests") return <BloodRequestsPage />;
 
   if (path === "/admin") {
     if (!token) {
@@ -1740,3 +2818,4 @@ function App() {
 }
 
 export default App;
+
