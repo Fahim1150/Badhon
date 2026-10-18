@@ -1499,7 +1499,7 @@ function DonorDirectory() {
   }, [bloodGroup, district, availability]);
 
   return (
-    <main className="page-container">
+    <main className="page-container donor-directory-page">
       <section className="page-header">
         <h1>Find Blood Donors</h1>
         <p>
@@ -1514,7 +1514,6 @@ function DonorDirectory() {
           <input
             id="donor-district"
             type="text"
-            className="requests-search-input"
             placeholder="Enter district or city..."
             value={district}
             onChange={(e) => setDistrict(e.target.value)}
@@ -1551,11 +1550,11 @@ function DonorDirectory() {
         </div>
       </section>
 
-      {loading && <p>Searching donors...</p>}
+      {loading && <p className="donor-status-message">Searching donors...</p>}
 
       {!loading && error && (
-        <p role="alert">{error}</p>
-      )}
+  <p role="alert" className="donor-error">{error}</p>
+)}
 
       {!loading && !error && donors.length === 0 && (
         <div className="donor-empty-state">
@@ -1568,10 +1567,10 @@ function DonorDirectory() {
 
       {!loading && !error && donors.length > 0 && (
         <>
-          <p>
-            Found {donors.length} donor
-            {donors.length !== 1 ? "s" : ""}.
-          </p>
+          <p className="donor-results-count">
+  Found {donors.length} donor
+  {donors.length !== 1 ? "s" : ""}.
+</p>
 
           <div className="donor-directory-grid">
             {donors.map((donor) => (
@@ -1600,9 +1599,9 @@ function DonorDirectory() {
                 </div>
 
                 <p>
-                  <strong>Blood Group:</strong>{" "}
-                  {donor.bloodGroup}
-                </p>
+  <strong>Blood Group:</strong>{" "}
+  <span className="donor-blood-chip">{donor.bloodGroup}</span>
+</p>
 
                 <p>
                   <strong>District:</strong>{" "}
