@@ -8,6 +8,7 @@ const {
     getMyDonorProfile,
     updateMyDonorProfile,
     getDonors,
+    searchDonors,
     getDonorById,
     updateDonor,
     deleteDonor,
@@ -20,6 +21,8 @@ router.post("/", authMiddleware, createDonor);
 router.get("/me", authMiddleware, getMyDonorProfile);
 
 router.put("/me", authMiddleware, updateMyDonorProfile);
+
+router.get("/search", searchDonors);
 
 router.get("/", authMiddleware, getDonors);
 

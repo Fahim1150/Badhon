@@ -1450,6 +1450,187 @@ function ProfileManagement() {
   );
 }
 
+
+function DonorDirectory() {
+  const [donors, setDonors] = useState([]);
+  const [bloodGroup, setBloodGroup] = useState("");
+  const [district, setDistrict] = useState("");
+  const [availability, setAvailability] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDonors = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const params = new URLSearchParams();
+
+        if (bloodGroup) params.set("bloodGroup", bloodGroup);
+        if (district.trim()) params.set("district", district.trim());
+        if (availability) params.set("available", availability);
+
+        const query = params.toString();
+        const endpoint = `/donors/search${query ? `?${query}` : ""}`;
+
+        const data = await apiRequest(endpoint);
+
+        if (!cancelled) {
+          setDonors(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Unable to load donors.");
+          setDonors([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadDonors();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bloodGroup, district, availability]);
+
+  return (
+    <main className="page-container">
+      <section className="page-header">
+        <h1>Find Blood Donors</h1>
+        <p>
+          Search for compatible blood donors by blood group
+          and district.
+        </p>
+      </section>
+
+      <section className="donor-search-filters">
+        <div className="form-group">
+          <label htmlFor="donor-district">District / City</label>
+          <input
+            id="donor-district"
+            type="text"
+            className="requests-search-input"
+            placeholder="Enter district or city..."
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="donor-blood-group">Blood Group</label>
+          <select
+            id="donor-blood-group"
+            value={bloodGroup}
+            onChange={(e) => setBloodGroup(e.target.value)}
+          >
+            <option value="">All blood groups</option>
+            {bloodGroups.map((group) => (
+              <option key={group} value={group}>
+                {group}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="donor-availability">Availability</label>
+          <select
+            id="donor-availability"
+            value={availability}
+            onChange={(e) => setAvailability(e.target.value)}
+          >
+            <option value="">All donors</option>
+            <option value="true">Available only</option>
+            <option value="false">Unavailable / Cooldown</option>
+          </select>
+        </div>
+      </section>
+
+      {loading && <p>Searching donors...</p>}
+
+      {!loading && error && (
+        <p role="alert">{error}</p>
+      )}
+
+      {!loading && !error && donors.length === 0 && (
+        <div className="donor-empty-state">
+          <h3>No donors found</h3>
+          <p>
+            Try another blood group or district.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && donors.length > 0 && (
+        <>
+          <p>
+            Found {donors.length} donor
+            {donors.length !== 1 ? "s" : ""}.
+          </p>
+
+          <div className="donor-directory-grid">
+            {donors.map((donor) => (
+              <article
+                className="donor-directory-card"
+                key={donor._id}
+              >
+                <div className="donor-directory-card-header">
+                  <h3>{donor.name}</h3>
+
+                  <span
+                    className={`availability-badge ${
+                      donor.available
+                        ? "available"
+                        : donor.eligible === false
+                        ? "cooldown"
+                        : "unavailable"
+                    }`}
+                  >
+                    {donor.available
+                      ? "Available"
+                      : donor.eligible === false
+                      ? "In Cooldown"
+                      : "Unavailable"}
+                  </span>
+                </div>
+
+                <p>
+                  <strong>Blood Group:</strong>{" "}
+                  {donor.bloodGroup}
+                </p>
+
+                <p>
+                  <strong>District:</strong>{" "}
+                  {donor.district}
+                </p>
+
+                {donor.available && donor.phone ? (
+                  <a
+                    className="primary-button donor-call-button"
+                    href={`tel:${donor.phone}`}
+                  >
+                    Call Donor
+                  </a>
+                ) : (
+                  <p className="donor-contact-private">
+                    Contact details are not available.
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </main>
+  );
+}
+
+
 function DonorProfile() {
   const [form, setForm] = useState({
     bloodGroup: "",
@@ -2803,6 +2984,10 @@ function App() {
     }
 
     return <ProfileManagement />;
+  }
+
+  if (path === "/donors") {
+    return <DonorDirectory />;
   }
 
   if (path === "/donor") {

@@ -258,15 +258,151 @@ const updateMyDonorProfile = async (req, res) => {
     }
 };
 
-// READ ALL
-const getDonors = async (req, res) => {
+
+
+const searchDonors = async (req, res) => {
     try {
-        const donors = await Donor.find().sort({ createdAt: -1 });
-        res.status(200).json(donors.map(donorResponse));
+        const { bloodGroup, district, location, available } = req.query;
+        const filter = {};
+
+        const validBloodGroups =
+            Donor.schema.path("bloodGroup").enumValues;
+
+        if (bloodGroup && !validBloodGroups.includes(bloodGroup)) {
+            return res.status(400).json({
+                message: "Please select a valid blood group",
+            });
+        }
+
+        if (bloodGroup) {
+            filter.bloodGroup = bloodGroup;
+        }
+
+        const area = (district || location || "").trim();
+
+        if (area) {
+            const escapedArea = area.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
+            filter.district = {
+                $regex: escapedArea,
+                $options: "i",
+            };
+        }
+
+        if (
+            available !== undefined &&
+            available !== "true" &&
+            available !== "false"
+        ) {
+            return res.status(400).json({
+                message: "Available must be true or false",
+            });
+        }
+
+        const donors = await Donor.find(filter).sort({ createdAt: -1 });
+
+        let results = donors.map((donor) => {
+            const response = donorResponse(donor);
+
+            // Never expose contact details for unavailable donors.
+            if (!response.available) {
+                delete response.phone;
+                delete response.email;
+            }
+
+            return response;
+        });
+
+        // Filter by effective availability, including cooldown eligibility.
+        if (available !== undefined) {
+            const expected = available === "true";
+            results = results.filter((donor) => donor.available === expected);
+        }
+
+        return res.status(200).json(results);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Search donors error:", error.message);
+
+        return res.status(500).json({
+            message: "Unable to search donors",
+        });
     }
 };
+
+
+ // READ ALL — with blood group, district and name search
+const getDonors = async (req, res) => {
+    try {
+        const { bloodGroup, district, search } = req.query;
+        const filter = {};
+
+        // Validate blood group when supplied
+        const validBloodGroups =
+            Donor.schema.path("bloodGroup").enumValues;
+
+        if (bloodGroup && !validBloodGroups.includes(bloodGroup)) {
+            return res.status(400).json({
+                message: "Please select a valid blood group",
+            });
+        }
+
+        if (bloodGroup) {
+            filter.bloodGroup = bloodGroup;
+        }
+
+        // Case-insensitive district filter
+        if (district && district.trim()) {
+            filter.district = {
+                $regex: district.trim().replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                ),
+                $options: "i",
+            };
+        }
+
+        // Optional name search
+        if (search && search.trim()) {
+            const safeSearch = search.trim().replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
+            filter.name = {
+                $regex: safeSearch,
+                $options: "i",
+            };
+        }
+
+        const donors = await Donor.find(filter).sort({
+            createdAt: -1,
+        });
+
+        const results = donors.map((donor) => {
+            const response = donorResponse(donor);
+
+            // Keep contact information private for unavailable donors
+            if (!response.available) {
+                delete response.phone;
+                delete response.email;
+            }
+
+            return response;
+        });
+
+        return res.status(200).json(results);
+    } catch (error) {
+        console.error("Get donors error:", error.message);
+
+        return res.status(500).json({
+            message: "Unable to retrieve donors",
+        });
+    }
+};
+
 
 // READ BY ID
 const getDonorById = async (req, res) => {
@@ -324,6 +460,7 @@ module.exports = {
     getMyDonorProfile,
     updateMyDonorProfile,
     getDonors,
+    searchDonors,
     getDonorById,
     updateDonor,
     deleteDonor,
