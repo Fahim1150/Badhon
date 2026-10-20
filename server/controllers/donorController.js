@@ -169,14 +169,13 @@ const getMyDonorProfile = async (req, res) => {
     }
 };
 
-// UPDATE MY DONOR PROFILE
+
 const updateMyDonorProfile = async (req, res) => {
     try {
         const {
             phone,
             bloodGroup,
             district,
-            lastDonationDate,
             available,
         } = req.body;
 
@@ -207,28 +206,19 @@ const updateMyDonorProfile = async (req, res) => {
             });
         }
 
-        const hasDonationDate = Object.prototype.hasOwnProperty.call(
-            req.body,
-            "lastDonationDate"
-        );
-        const parsedDonationDate = hasDonationDate
-            ? parseLastDonationDate(lastDonationDate)
-            : null;
-
-        if (parsedDonationDate?.error) {
-            return res.status(400).json({ message: parsedDonationDate.error });
-        }
-
-        const currentDonor = await Donor.findOne({ user: req.user.userId });
+        const currentDonor = await Donor.findOne({
+            user: req.user.userId,
+        });
 
         if (!currentDonor) {
-            return res.status(404).json({ message: "Donor profile not found" });
+            return res.status(404).json({
+                message: "Donor profile not found",
+            });
         }
 
-        const effectiveDonationDate = hasDonationDate
-            ? parsedDonationDate.value
-            : currentDonor.lastDonationDate;
-        const eligible = getEligibility(effectiveDonationDate).eligible;
+        const eligible = getEligibility(
+            currentDonor.lastDonationDate
+        ).eligible;
 
         const donor = await Donor.findOneAndUpdate(
             { user: req.user.userId },
@@ -236,23 +226,16 @@ const updateMyDonorProfile = async (req, res) => {
                 phone: normalizedPhone,
                 bloodGroup,
                 district: normalizedDistrict,
-                ...(hasDonationDate && { lastDonationDate: parsedDonationDate.value }),
                 available: available === true && eligible,
             },
             { new: true, runValidators: true }
         );
 
-        if (!donor) {
-            return res.status(404).json({
-                message: "Donor profile not found",
-            });
-        }
-
-        res.status(200).json(donorResponse(donor));
+        return res.status(200).json(donorResponse(donor));
     } catch (error) {
         console.error("Update donor profile error:", error.message);
 
-        res.status(400).json({
+        return res.status(400).json({
             message: error.message,
         });
     }
@@ -333,7 +316,7 @@ const searchDonors = async (req, res) => {
 };
 
 
- // READ ALL — with blood group, district and name search
+// READ ALL — with blood group, district and name search
 const getDonors = async (req, res) => {
     try {
         const { bloodGroup, district, search } = req.query;
