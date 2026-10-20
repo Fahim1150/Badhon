@@ -1,5 +1,6 @@
 const Donor = require("../models/Donor");
 const User = require("../models/User");
+const Donation = require("../models/Donation");
 
 const isCompleteDonorProfile = (donor) =>
     Donor.schema.path("bloodGroup").enumValues.includes(donor.bloodGroup) &&
@@ -24,32 +25,30 @@ const getEligibility = (lastDonationDate) => {
     };
 };
 
-const parseLastDonationDate = (value) => {
-    if (value === undefined || value === null || value === "") {
-        return { value: null };
+const syncDonorEligibility = async (donor) => {
+    const latestVerifiedDonation = await Donation.findOne({
+        donor: donor._id,
+        status: "verified",
+    }).sort({
+        date: -1,
+        createdAt: -1,
+    });
+
+    donor.lastDonationDate = latestVerifiedDonation
+        ? latestVerifiedDonation.date
+        : null;
+
+    const eligibility = getEligibility(donor.lastDonationDate);
+
+    if (!eligibility.eligible) {
+        donor.available = false;
     }
 
-    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return { error: "Please provide a valid last donation date" };
-    }
+    await donor.save();
 
-    const parsedDate = new Date(`${value}T00:00:00.000Z`);
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-
-    if (
-        Number.isNaN(parsedDate.getTime()) ||
-        parsedDate.toISOString().slice(0, 10) !== value
-    ) {
-        return { error: "Please provide a valid last donation date" };
-    }
-
-    if (parsedDate > today) {
-        return { error: "Last donation date cannot be in the future" };
-    }
-
-    return { value: parsedDate };
+    return eligibility;
 };
+
 
 const donorResponse = (donor) => {
     const response = donor.toObject();
@@ -70,8 +69,6 @@ const createDonor = async (req, res) => {
             phone,
             bloodGroup,
             district,
-            lastDonationDate,
-            available,
         } = req.body;
 
         const normalizedPhone = String(phone || "").trim();
@@ -95,17 +92,7 @@ const createDonor = async (req, res) => {
             });
         }
 
-        if (available !== undefined && typeof available !== "boolean") {
-            return res.status(400).json({
-                message: "Availability must be true or false",
-            });
-        }
 
-        const parsedDonationDate = parseLastDonationDate(lastDonationDate);
-
-        if (parsedDonationDate.error) {
-            return res.status(400).json({ message: parsedDonationDate.error });
-        }
 
         const user = await User.findById(req.user.userId);
 
@@ -132,8 +119,8 @@ const createDonor = async (req, res) => {
             phone: normalizedPhone,
             bloodGroup,
             district: normalizedDistrict,
-            lastDonationDate: parsedDonationDate.value,
-            available: available === true && getEligibility(parsedDonationDate.value).eligible,
+            lastDonationDate: null,
+            available: false,
         });
 
         res.status(201).json(donorResponse(donor));
@@ -159,7 +146,9 @@ const getMyDonorProfile = async (req, res) => {
             });
         }
 
-        res.status(200).json(donorResponse(donor));
+        await syncDonorEligibility(donor);
+
+        return res.status(200).json(donorResponse(donor));
     } catch (error) {
         console.error("Get donor profile error:", error.message);
 
@@ -216,20 +205,27 @@ const updateMyDonorProfile = async (req, res) => {
             });
         }
 
-        const eligible = getEligibility(
-            currentDonor.lastDonationDate
-        ).eligible;
+        const eligibility = await syncDonorEligibility(currentDonor);
 
-        const donor = await Donor.findOneAndUpdate(
-            { user: req.user.userId },
-            {
-                phone: normalizedPhone,
-                bloodGroup,
-                district: normalizedDistrict,
-                available: available === true && eligible,
-            },
-            { new: true, runValidators: true }
-        );
+        if (available === true && !eligibility.eligible) {
+            return res.status(400).json({
+                message: "You cannot enable availability during the 90-day recovery period",
+                eligibleOn: eligibility.eligibleOn,
+            });
+        }
+
+        currentDonor.phone = normalizedPhone;
+        currentDonor.bloodGroup = bloodGroup;
+        currentDonor.district = normalizedDistrict;
+
+        if (available !== undefined) {
+            currentDonor.available = available;
+        }
+
+        await currentDonor.save();
+
+        const donor = currentDonor;
+
 
         return res.status(200).json(donorResponse(donor));
     } catch (error) {
@@ -403,23 +399,79 @@ const getDonorById = async (req, res) => {
 };
 
 // UPDATE BY ID
+
 const updateDonor = async (req, res) => {
     try {
-        const donor = await Donor.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        );
+        const { phone, bloodGroup, district, available } = req.body;
+
+        const donor = await Donor.findById(req.params.id);
 
         if (!donor) {
-            return res.status(404).json({ message: "Donor not found" });
+            return res.status(404).json({
+                message: "Donor not found",
+            });
+        }
+        const eligibility = await syncDonorEligibility(donor);
+        if (phone !== undefined) {
+            if (typeof phone !== "string" || !/^01\d{9}$/.test(phone.trim())) {
+                return res.status(400).json({
+                    message: "Please provide a valid Bangladesh mobile number",
+                });
+            }
+            donor.phone = phone.trim();
         }
 
-        res.status(200).json(donor);
+        if (bloodGroup !== undefined) {
+            if (!Donor.schema.path("bloodGroup").enumValues.includes(bloodGroup)) {
+                return res.status(400).json({
+                    message: "Please select a valid blood group",
+                });
+            }
+            donor.bloodGroup = bloodGroup;
+        }
+
+        if (district !== undefined) {
+            if (typeof district !== "string" || district.trim().length < 2) {
+                return res.status(400).json({
+                    message: "Please provide a valid district",
+                });
+            }
+            donor.district = district.trim();
+        }
+
+        if (available !== undefined && typeof available !== "boolean") {
+            return res.status(400).json({
+                message: "Availability must be true or false",
+            });
+        }
+
+        const profileComplete = isCompleteDonorProfile(donor);
+
+        if (available === true && (!eligibility.eligible || !profileComplete)) {
+            return res.status(400).json({
+                message: !eligibility.eligible
+                    ? "Donor is still within the 90-day recovery period"
+                    : "Complete the donor profile before enabling availability",
+                eligibleOn: eligibility.eligibleOn,
+            });
+        }
+
+        if (available !== undefined) {
+            donor.available = available;
+        }
+
+        await donor.save();
+
+        return res.status(200).json(donorResponse(donor));
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error("Update donor error:", error.message);
+
+        return res.status(400).json({
+            message: error.message,
+        });
     }
 };
+
 
 // DELETE
 const deleteDonor = async (req, res) => {

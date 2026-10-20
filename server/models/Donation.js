@@ -10,6 +10,13 @@ const donationSchema = new mongoose.Schema(
             index: true,
         },
 
+        status: {
+            type: String,
+            enum: ["pending", "verified", "rejected"],
+            default: "pending",
+            required: true,
+        },
+
         date: {
             type: Date,
             required: true,
@@ -47,6 +54,26 @@ const donationSchema = new mongoose.Schema(
         },
 
         notes: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: "",
+        },
+
+    
+
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+
+        reviewedAt: {
+            type: Date,
+            default: null,
+        },
+
+        rejectionReason: {
             type: String,
             trim: true,
             maxlength: 500,

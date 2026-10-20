@@ -47,13 +47,58 @@ function isDonorProfileComplete(profile) {
   );
 }
 
-function getEligibilityDate(lastDonationDate) {
+
+
+const getEligibilityDate = (lastDonationDate) => {
   if (!lastDonationDate) return null;
 
-  const eligibilityDate = new Date(`${lastDonationDate}T00:00:00.000Z`);
-  eligibilityDate.setUTCDate(eligibilityDate.getUTCDate() + 90);
+  // Accept only a valid date value.
+  const date = new Date(lastDonationDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  // Use UTC calendar dates to avoid timezone shifts.
+  const eligibilityDate = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    )
+  );
+
+  eligibilityDate.setUTCDate(
+    eligibilityDate.getUTCDate() + 90
+  );
+
   return eligibilityDate.toISOString().slice(0, 10);
-}
+};
+
+
+const getCooldownDaysRemaining = (lastDonationDate) => {
+  const eligibilityDate = getEligibilityDate(lastDonationDate);
+
+  if (!eligibilityDate) return null;
+
+  const today = new Date();
+  const todayUTC = Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate()
+  );
+
+  const eligibleUTC = Date.parse(
+    `${eligibilityDate}T00:00:00.000Z`
+  );
+
+  return Math.max(
+    0,
+    Math.ceil((eligibleUTC - todayUTC) / 86400000)
+  );
+};
+
+
 
 function isDonorEligible(lastDonationDate) {
   const eligibilityDate = getEligibilityDate(lastDonationDate);
@@ -1553,8 +1598,8 @@ function DonorDirectory() {
       {loading && <p className="donor-status-message">Searching donors...</p>}
 
       {!loading && error && (
-  <p role="alert" className="donor-error">{error}</p>
-)}
+        <p role="alert" className="donor-error">{error}</p>
+      )}
 
       {!loading && !error && donors.length === 0 && (
         <div className="donor-empty-state">
@@ -1568,9 +1613,9 @@ function DonorDirectory() {
       {!loading && !error && donors.length > 0 && (
         <>
           <p className="donor-results-count">
-  Found {donors.length} donor
-  {donors.length !== 1 ? "s" : ""}.
-</p>
+            Found {donors.length} donor
+            {donors.length !== 1 ? "s" : ""}.
+          </p>
 
           <div className="donor-directory-grid">
             {donors.map((donor) => (
@@ -1582,26 +1627,25 @@ function DonorDirectory() {
                   <h3>{donor.name}</h3>
 
                   <span
-                    className={`availability-badge ${
-                      donor.available
-                        ? "available"
-                        : donor.eligible === false
+                    className={`availability-badge ${donor.available
+                      ? "available"
+                      : donor.eligible === false
                         ? "cooldown"
                         : "unavailable"
-                    }`}
+                      }`}
                   >
                     {donor.available
                       ? "Available"
                       : donor.eligible === false
-                      ? "In Cooldown"
-                      : "Unavailable"}
+                        ? "In Cooldown"
+                        : "Unavailable"}
                   </span>
                 </div>
 
                 <p>
-  <strong>Blood Group:</strong>{" "}
-  <span className="donor-blood-chip">{donor.bloodGroup}</span>
-</p>
+                  <strong>Blood Group:</strong>{" "}
+                  <span className="donor-blood-chip">{donor.bloodGroup}</span>
+                </p>
 
                 <p>
                   <strong>District:</strong>{" "}
@@ -1646,6 +1690,9 @@ function DonorProfile() {
   const [loadError, setLoadError] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [donations, setDonations] = useState([]);
+  const [donationsLoading, setDonationsLoading] = useState(false);
+  const [donationsError, setDonationsError] = useState("");
 
   const goTo = (path) => {
     window.history.pushState({}, "", path);
@@ -1702,6 +1749,41 @@ function DonorProfile() {
 
     loadDonorProfile();
   }, [loadAttempt]);
+
+  useEffect(() => {
+    if (!profileExists) return;
+
+    const loadDonations = async () => {
+      setDonationsLoading(true);
+      setDonationsError("");
+
+      const token = localStorage.getItem("badhon_token");
+
+      if (!token) {
+        setDonationsError("Please log in to view your donation history.");
+        setDonationsLoading(false);
+        return;
+      }
+
+      try {
+        const data = await apiRequest("/donations/my", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        setDonations(Array.isArray(data.donations) ? data.donations : []);
+      } catch (err) {
+        setDonationsError(
+          err.message || "Could not load donation history."
+        );
+      } finally {
+        setDonationsLoading(false);
+      }
+    };
+
+    loadDonations();
+  }, [profileExists, loadAttempt]);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -1831,8 +1913,39 @@ function DonorProfile() {
     );
   }
 
-  const eligibilityDate = getEligibilityDate(form.lastDonationDate);
-  const donorEligible = isDonorEligible(form.lastDonationDate);
+
+  const latestDonationDate = donations.reduce((latest, donation) => {
+    if (!donation.date) return latest;
+
+    const donationDate = new Date(donation.date);
+
+    if (!latest || donationDate > new Date(latest)) {
+      return donation.date;
+    }
+
+    return latest;
+  }, null);
+
+  const effectiveLastDonationDate =
+    latestDonationDate || form.lastDonationDate;
+
+  const eligibilityDate = getEligibilityDate(effectiveLastDonationDate);
+  const donorEligible = isDonorEligible(effectiveLastDonationDate);
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const daysRemaining = eligibilityDate
+    ? Math.max(
+      0,
+      Math.ceil(
+        (new Date(`${eligibilityDate}T00:00:00.000Z`).getTime() -
+          today.getTime()) /
+        (1000 * 60 * 60 * 24)
+      )
+    )
+    : 0;
+
 
   return (
     <>
@@ -1871,6 +1984,8 @@ function DonorProfile() {
               </p>
               {profile && <small>Donor: {profile.name} · {profile.email}</small>}
             </div>
+
+            
           </section>
 
           {message && <Feedback type="success">{message}</Feedback>}
@@ -1882,6 +1997,8 @@ function DonorProfile() {
               <p>Complete the details below to create your profile. It will remain unavailable until you choose to turn availability on.</p>
             </div>
           )}
+
+          
 
           <form className="donor-form" onSubmit={handleSubmit}>
             <section className="donor-form-section">
@@ -1950,6 +2067,75 @@ function DonorProfile() {
               </button>
             </div>
           </form>
+
+          {profileExists && (
+            <section className="donor-form-section" aria-labelledby="donation-history-heading" style={{ marginTop: "24px" }}>
+              <h2 id="donation-history-heading">Donation History</h2>
+              <p>Review the donations recorded for your BADHON account.</p>
+
+              <div className="admin-panel" style={{ marginBottom: "20px" }}>
+                <div className="admin-stat">
+                  <span className="admin-stat-label">Recorded donations</span>
+                  <div className="admin-stat-value">{donations.length}</div>
+                </div>
+                <div className="admin-stat">
+                  <span className="admin-stat-label">Units donated</span>
+                  <div className="admin-stat-value">
+                    {donations.reduce((total, donation) => total + (Number(donation.units) || 0), 0)}
+                  </div>
+                </div>
+                <div className="admin-stat">
+                  <span className="admin-stat-label">Estimated lives impacted</span>
+                  <div className="admin-stat-value">{donations.length * 3}</div>
+                  <small>Estimate only; actual impact varies.</small>
+                </div>
+              </div>
+
+              {donationsLoading && <p role="status">Loading your donation history...</p>}
+              {!donationsLoading && donationsError && (
+                <Feedback type="error">{donationsError}</Feedback>
+              )}
+              {!donationsLoading && !donationsError && donations.length === 0 && (
+                <div className="donor-empty-state">
+                  <strong>No donations recorded yet.</strong>
+                  <p>When a donation is recorded for your account, it will appear here.</p>
+                </div>
+              )}
+
+              {!donationsLoading && !donationsError && donations.length > 0 && (
+                <div className="admin-card">
+                  <div className="admin-table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Hospital</th>
+                          <th>Units</th>
+                          <th>Recipient reference</th>
+                          <th>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {donations.map((donation) => (
+                          <tr key={donation._id || `${donation.date}-${donation.hospital}`}>
+                            <td>
+                              {donation.date
+                                ? new Date(donation.date).toLocaleDateString()
+                                : "—"}
+                            </td>
+                            <td>{donation.hospital || "—"}</td>
+                            <td>{Number(donation.units) || 0}</td>
+                            <td>{donation.recipientReference || "—"}</td>
+                            <td>{donation.notes || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </main>
     </>
@@ -2734,8 +2920,8 @@ function BloodRequestsPage() {
                     {formSubmitting
                       ? "Saving..."
                       : editingRequest
-                      ? "Update Request"
-                      : "Publish Blood Request"}
+                        ? "Update Request"
+                        : "Publish Blood Request"}
                   </button>
                 </div>
               </form>
@@ -2800,8 +2986,8 @@ function BloodRequestsPage() {
                     {submittingResponse
                       ? "Submitting..."
                       : responseStatus === "Accepted"
-                      ? "Confirm Accept"
-                      : "Confirm Decline"}
+                        ? "Confirm Accept"
+                        : "Confirm Decline"}
                   </button>
                 </div>
               </form>
