@@ -28,7 +28,7 @@ router.get("/", authMiddleware, getDonors);
 
 router.get("/:id", authMiddleware, getDonorById);
 
-router.put("/:id", authMiddleware, updateDonor);
+router.put("/:id", authMiddleware, authorizeRoles("ADMIN"), updateDonor);
 
 router.delete(
     "/:id",
