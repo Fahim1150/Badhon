@@ -307,6 +307,7 @@ function Header() {
         <nav className="main-nav">
           <button onClick={() => goTo("/")}>Home</button>
           <button onClick={() => goTo("/requests")}>Find Blood</button>
+          <button onClick={() => goTo("/donors")}>Find Donors</button>
 
           {token ? (
             <>
@@ -401,6 +402,7 @@ function Home() {
 
               <div className="hero-actions">
                 <button className="btn btn-primary btn-large" onClick={() => navigate("/requests")}>Find Blood</button>
+                {/* <button className="btn btn-primary btn-large" onClick={() => navigate("/donors")}>Find Donors</button> */}
                 <button className="btn btn-outline btn-large" onClick={() => navigate("/register")}>Become a Donor</button>
               </div>
 
