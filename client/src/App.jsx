@@ -1546,6 +1546,7 @@ function DonorDirectory() {
   return (
     <main className="page-container donor-directory-page">
       <section className="page-header">
+        <p className="donor-eyebrow">Save lives • Find a donor</p>
         <h1>Find Blood Donors</h1>
         <p>
           Search for compatible blood donors by blood group

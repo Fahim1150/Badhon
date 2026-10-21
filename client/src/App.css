@@ -2079,7 +2079,7 @@
 .donor-directory-page {
   box-sizing: border-box;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1168px;
   margin: 0 auto;
   padding: 40px 24px 64px;
 }
@@ -2108,4 +2108,13 @@
   .donor-directory-page {
     padding: 28px 16px 48px;
   }
+}
+
+.donor-directory-page .page-header .donor-eyebrow {
+  margin: 0 0 8px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
