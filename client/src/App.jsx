@@ -3652,18 +3652,18 @@ function App() {
 
   if (path === "/dashboard" && !token) {
     window.history.replaceState({}, "", "/login");
-    return <AuthPage mode="login" />;
+    return <AuthPage key="login" mode="login" />;
   }
 
-  if (path === "/register") return <AuthPage mode="register" />;
-  if (path === "/login") return <AuthPage mode="login" />;
+  if (path === "/register") return <AuthPage key="register" mode="register" />;
+  if (path === "/login") return <AuthPage key="login" mode="login" />;
   if (path === "/dashboard") return <Dashboard />;
   if (path === "/requests") return <BloodRequestsPage />;
 
   if (path === "/admin") {
     if (!token) {
       window.history.replaceState({}, "", "/login");
-      return <AuthPage mode="login" />;
+      return <AuthPage key="login" mode="login" />;
     }
 
     if (!isAdmin) {
@@ -3677,7 +3677,7 @@ function App() {
   if (path === "/profile") {
     if (!token) {
       window.history.replaceState({}, "", "/login");
-      return <AuthPage mode="login" />;
+      return <AuthPage key="login" mode="login" />;
     }
 
     return <ProfileManagement />;
@@ -3690,7 +3690,7 @@ function App() {
   if (path === "/donor") {
     if (!token) {
       window.history.replaceState({}, "", "/login");
-      return <AuthPage mode="login" />;
+      return <AuthPage key="login" mode="login" />;
     }
 
     return <DonorProfile />;
