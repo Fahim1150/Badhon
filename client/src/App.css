@@ -2017,7 +2017,26 @@
   width: 100%;
   min-height: 46px;
   margin-top: 20px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
   text-decoration: none;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.donor-call-button:hover {
+  background: #b91c1c;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.donor-call-button:focus-visible {
+  outline: 3px solid rgba(220, 38, 38, 0.35);
+  outline-offset: 3px;
 }
 
 .donor-contact-private {
@@ -2117,4 +2136,288 @@
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+
+/* ==========================================================================
+   DONATION MANAGEMENT & VERIFICATION (PART B)
+   ========================================================================== */
+
+.donation-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.donation-status-verified {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.donation-status-pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.donation-status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.cooldown-clock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #fecaca;
+  margin-top: 6px;
+}
+
+.admin-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-verify-btn {
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.admin-verify-btn:hover {
+  background: #15803d;
+}
+
+.admin-reject-btn {
+  background: white;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-reject-btn:hover {
+  background: #fef2f2;
+}
+
+.donor-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.donation-milestones {
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.donation-milestones-heading,
+.donation-milestone-progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.donation-milestones-heading h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+}
+
+.donation-milestones-heading p,
+.donation-milestone-empty {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.donation-milestone-count {
+  flex: 0 0 auto;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.donation-milestone-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.donation-milestone-earned {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.donation-milestone-progress {
+  margin-top: 16px;
+}
+
+.donation-milestone-progress-label {
+  margin-bottom: 7px;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.donation-milestone-progress progress {
+  display: block;
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #e5e7eb;
+  accent-color: #b91c1c;
+}
+
+.donation-timeline {
+  margin: 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+}
+
+.donation-timeline-item {
+  position: relative;
+  padding: 0 0 20px 20px;
+  border-left: 2px solid #e5e7eb;
+}
+
+.donation-timeline-item:last-child {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+
+.donation-timeline-item::before {
+  position: absolute;
+  top: 4px;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #9ca3af;
+  box-shadow: 0 0 0 1px #d1d5db;
+  content: "";
+}
+
+.donation-timeline-verified::before {
+  background: #16a34a;
+  box-shadow: 0 0 0 1px #86efac;
+}
+
+.donation-timeline-pending::before {
+  background: #d97706;
+  box-shadow: 0 0 0 1px #fcd34d;
+}
+
+.donation-timeline-rejected::before {
+  background: #dc2626;
+  box-shadow: 0 0 0 1px #fca5a5;
+}
+
+.donation-timeline-card {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.donation-timeline-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.donation-timeline-header time {
+  display: block;
+  margin-bottom: 4px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.donation-timeline-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+}
+
+.donation-timeline-card p {
+  margin: 8px 0 0;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.donation-timeline-card .donation-timeline-units {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.donation-timeline-card .donation-rejection-reason {
+  color: #991b1b;
+}
+
+@media (max-width: 600px) {
+  .donation-milestones {
+    padding: 16px;
+  }
+
+  .donation-timeline {
+    padding-left: 12px;
+  }
+
+  .donation-timeline-item {
+    padding-left: 14px;
+  }
+
+  .donation-timeline-header {
+    flex-direction: column;
+  }
 }
