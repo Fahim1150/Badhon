@@ -166,6 +166,32 @@ const createDonation = async (req, res) => {
             });
         }
 
+        // Prevent duplicate donation records
+const startOfDay = new Date(parsedDate);
+startOfDay.setHours(0, 0, 0, 0);
+
+const endOfDay = new Date(parsedDate);
+endOfDay.setHours(23, 59, 59, 999);
+
+const existingDonation = await Donation.findOne({
+    donor: donor._id,
+    date: {
+        $gte: startOfDay,
+        $lte: endOfDay,
+    },
+    hospital: {
+        $regex: `^${hospital.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+        $options: "i",
+    },
+    status: { $in: ["pending", "verified"] },
+});
+
+if (existingDonation) {
+    return res.status(409).json({
+        message: "You have already submitted a donation record for this hospital on this date",
+    });
+}
+
         const donation = await Donation.create({
             donor: donor._id,
             date: parsedDate,
