@@ -45,6 +45,32 @@ const createBloodRequest = async (req, res) => {
     const trimmedHospital = String(hospital || "").trim();
     const trimmedNotes = String(notes || "").trim();
 
+    // Validate hospital
+if (
+  hospital !== undefined &&
+  (
+    typeof hospital !== "string" ||
+    hospital.trim().length > 150
+  )
+) {
+  return res.status(400).json({
+    message: "Hospital must be a valid string of at most 150 characters",
+  });
+}
+
+// Validate notes
+if (
+  notes !== undefined &&
+  (
+    typeof notes !== "string" ||
+    notes.trim().length > 500
+  )
+) {
+  return res.status(400).json({
+    message: "Notes must be a string of at most 500 characters",
+  });
+}
+
     if (!trimmedPatientName || trimmedPatientName.length < 2) {
       return res.status(400).json({
         message: "Patient name is required (at least 2 characters)",
@@ -98,6 +124,22 @@ const createBloodRequest = async (req, res) => {
         });
       }
     }
+
+    // Prevent duplicate active blood requests
+const existingRequest = await BloodRequest.findOne({
+  requester: req.user.userId,
+  patientName: trimmedPatientName,
+  bloodGroup: bloodGroup,
+  location: trimmedLocation,
+  contactNumber: trimmedContact,
+  status: { $in: ["Pending", "Matched"] },
+});
+
+if (existingRequest) {
+  return res.status(409).json({
+    message: "You already have an active blood request with the same details",
+  });
+}
 
     const bloodRequest = await BloodRequest.create({
       requester: req.user.userId,
@@ -282,8 +324,17 @@ const updateBloodRequest = async (req, res) => {
     }
 
     if (hospital !== undefined) {
-      request.hospital = String(hospital).trim();
-    }
+  if (
+    typeof hospital !== "string" ||
+    hospital.trim().length > 150
+  ) {
+    return res.status(400).json({
+      message: "Hospital must be a string of at most 150 characters",
+    });
+  }
+
+  request.hospital = hospital.trim();
+}
 
     if (contactNumber !== undefined) {
       const trimmed = String(contactNumber).trim();
@@ -296,14 +347,21 @@ const updateBloodRequest = async (req, res) => {
     }
 
     if (requiredUnits !== undefined) {
-      const units = Number(requiredUnits);
-      if (!units || Number.isNaN(units) || units < 1) {
-        return res.status(400).json({
-          message: "Required units must be an integer greater than or equal to 1",
-        });
-      }
-      request.requiredUnits = Math.floor(units);
-    }
+  const units = Number(requiredUnits);
+
+  if (
+    requiredUnits === null ||
+    requiredUnits === "" ||
+    !Number.isInteger(units) ||
+    units < 1
+  ) {
+    return res.status(400).json({
+      message: "Required units must be a positive whole number",
+    });
+  }
+
+  request.requiredUnits = units;
+}
 
     if (urgency !== undefined) {
       if (!validUrgencies.includes(urgency)) {
@@ -325,8 +383,17 @@ const updateBloodRequest = async (req, res) => {
     }
 
     if (notes !== undefined) {
-      request.notes = String(notes).trim();
-    }
+  if (
+    typeof notes !== "string" ||
+    notes.trim().length > 500
+  ) {
+    return res.status(400).json({
+      message: "Notes must be a string of at most 500 characters",
+    });
+  }
+
+  request.notes = notes.trim();
+}
 
     await request.save();
 
@@ -457,10 +524,12 @@ const respondToBloodRequest = async (req, res) => {
     };
 
     if (existingIndex >= 0) {
-      request.responses[existingIndex] = responseData;
-    } else {
-      request.responses.push(responseData);
-    }
+  return res.status(409).json({
+    message: "You have already responded to this blood request",
+  });
+}
+
+request.responses.push(responseData);
 
     // Status transition: if Accepted, set to Matched
     if (status === "Accepted") {
